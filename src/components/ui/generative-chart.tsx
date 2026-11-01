@@ -1,5 +1,5 @@
 import * as React from "react"
-import type { ViewChart } from "@/components/ui/generative-view"
+import type { ViewChart } from "@/lib/generative-view"
 import { cn } from "@/lib/utils"
 
 const WIDTH = 640

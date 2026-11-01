@@ -197,14 +197,12 @@ export function ModelPicker({
           side={side}
           align="start"
           sideOffset={8}
-          collisionPadding={12}
           className="w-[min(15rem,calc((100vw-1.5rem)/var(--ui-scale,1)))]"
         >
           <DropdownMenuSub>
             <SectionTrigger label={label} value={current?.name ?? placeholder} />
             <DropdownMenuSubContent
               data-slot="model-picker-list"
-              collisionPadding={12}
               className="w-[min(17rem,calc((100vw-1.5rem)/var(--ui-scale,1)))] p-0"
             >
               {modelList}
@@ -218,7 +216,6 @@ export function ModelPicker({
             />
             <DropdownMenuSubContent
               data-slot="model-picker-effort"
-              collisionPadding={12}
               className="w-[min(13rem,calc((100vw-1.5rem)/var(--ui-scale,1)))]"
             >
               {effortOptions?.map((option) => (
@@ -246,7 +243,6 @@ export function ModelPicker({
           side={side}
           align="start"
           sideOffset={8}
-          collisionPadding={12}
           className="w-[min(17rem,calc((100vw-1.5rem)/var(--ui-scale,1)))] p-0"
         >
           <div data-slot="model-picker-list">{modelList}</div>

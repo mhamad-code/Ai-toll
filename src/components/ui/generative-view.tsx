@@ -27,7 +27,7 @@ import {
   type ViewNode,
   type ViewSpec,
   type ViewTone,
-} from "@/components/ui/generative-view"
+} from "@/lib/generative-view"
 import { cn } from "@/lib/utils"
 
 export type GenerativeViewSlot =

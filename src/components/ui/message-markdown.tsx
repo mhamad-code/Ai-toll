@@ -29,7 +29,7 @@ import {
   parseMarkdownFileLink,
   type FilePathPosition,
 } from "@/lib/markdown-file-paths"
-import { VIEW_FENCE_LANGUAGE, type ViewAction } from "@/components/ui/generative-view"
+import { VIEW_FENCE_LANGUAGE, type ViewAction } from "@/lib/generative-view"
 import { remarkGithubAlerts } from "@/lib/markdown-github-alerts"
 import { remarkNormalizeListItemIndentation } from "@/lib/markdown-list-indentation"
 import { isContinuation, nextPhraseReveal } from "@/lib/stream-pacing"

@@ -1,7 +1,7 @@
 import { ArrowDown } from "lucide-react"
 import * as React from "react"
 
-import type { ViewAction } from "@/components/ui/generative-view"
+import type { ViewAction } from "@/lib/generative-view"
 import { cn } from "@/lib/utils"
 import {
   GenerationStatus,

@@ -68,7 +68,7 @@ import {
   tokenizeShell,
   type ShellTokenKind,
 } from "@/lib/command-label"
-import { jsonToView } from "@/components/ui/generative-view"
+import { jsonToView } from "@/lib/generative-view"
 import { fnv1a32, LRUCache } from "@/lib/lru-cache"
 import { cn } from "@/lib/utils"
 import { MessageMarkdown } from "@/components/ui/message-markdown"

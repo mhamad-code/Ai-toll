@@ -28,7 +28,7 @@ import {
   type ChangeSummaryFile,
   type FileActionItem,
 } from "@/components/ui/change-summary"
-import type { ViewAction } from "@/components/ui/generative-view"
+import type { ViewAction } from "@/lib/generative-view"
 import { cn } from "@/lib/utils"
 import { MessageMarkdown } from "@/components/ui/message-markdown"
 
