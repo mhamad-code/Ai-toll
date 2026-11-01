@@ -1,0 +1,55 @@
+name: Setup
+on: workflow_dispatch
+permissions:
+  contents: write
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Scaffold Vite
+        run: |
+          npm create vite@latest tmp-app -- --template react-ts
+          cp -r tmp-app/. .
+          rm -rf tmp-app
+          npm install
+          npm install tailwindcss @tailwindcss/vite
+          npm install -D @types/node
+          echo '@import "tailwindcss";' > src/index.css
+          cat > vite.config.ts <<'TS'
+          import path from "path"
+          import tailwindcss from "@tailwindcss/vite"
+          import react from "@vitejs/plugin-react"
+          import { defineConfig } from "vite"
+          export default defineConfig({
+            base: "./",
+            plugins: [react(), tailwindcss()],
+            resolve: { alias: { "@": path.resolve(__dirname, "./src") } },
+          })
+          TS
+          cat > tsconfig.json <<'JSON'
+          {
+            "files": [],
+            "references": [
+              { "path": "./tsconfig.app.json" },
+              { "path": "./tsconfig.node.json" }
+            ],
+            "compilerOptions": { "paths": { "@/*": ["./src/*"] } }
+          }
+          JSON
+          sed -i 's|"compilerOptions": {|"compilerOptions": {\n    "paths": { "@/*": ["./src/*"] },|' tsconfig.app.json
+      - name: shadcn init
+        run: npx shadcn@latest init -d -y
+      - name: Add chat components
+        run: npx shadcn@latest add miskibin/chat-components/chat --yes --overwrite
+      - name: Commit
+        if: always()
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add -A
+          git commit -m "Scaffold project" || echo "no changes"
+          git push
