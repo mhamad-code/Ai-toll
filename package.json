@@ -16,6 +16,7 @@
     "@dnd-kit/utilities": "^3.2.2",
     "@fontsource-variable/geist": "^5.3.0",
     "@radix-ui/react-context-menu": "^2.4.1",
+    "@shadcn/react": "^0.3.1",
     "@streamdown/code": "^2.0.0",
     "@streamdown/math": "^1.0.3",
     "@streamdown/mermaid": "^1.0.3",
