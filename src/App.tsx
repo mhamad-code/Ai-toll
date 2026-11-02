@@ -3,6 +3,7 @@ import { Boxes, KeyRound, Menu, MessageSquarePlus } from "lucide-react"
 
 import { Chat } from "@/components/chat"
 import { ModelsPage } from "@/components/models-page"
+import { ModelLogo, ProviderLogo } from "@/components/provider-logo"
 import { ProvidersPage } from "@/components/providers-page"
 import { Button } from "@/components/ui/button"
 import { ChatNavbar } from "@/components/ui/chat-navbar"
@@ -16,9 +17,9 @@ import { ModelPicker, type ModelOption } from "@/components/ui/model-picker"
 import { ThemeToggle } from "@/components/ui/theme-toggle"
 import { PROVIDERS } from "@/lib/providers"
 import { modelKey, settings, useSettings } from "@/lib/store"
+import { useChats } from "@/lib/use-chats"
 
 type Page = "chat" | "providers" | "models"
-type Conv = { id: string; title: string }
 
 function useIsMobile() {
   const query = "(max-width: 767px)"
@@ -36,17 +37,17 @@ function useIsMobile() {
 
 export default function App() {
   const mobile = useIsMobile()
-  const { saved, active } = useSettings()
+  const { keys, saved, active } = useSettings()
+  const { convs, activeId, setActiveId, newChat, send, stop } = useChats()
+
   const [page, setPage] = React.useState<Page>("chat")
   const [collapsed, setCollapsed] = React.useState(false)
   const [open, setOpen] = React.useState(false)
   const [sectionOpen, setSectionOpen] = React.useState(true)
-  const [convs, setConvs] = React.useState<Conv[]>(() => [
-    { id: crypto.randomUUID(), title: "New chat" },
-  ])
-  const [activeId, setActiveId] = React.useState(() => convs[0].id)
 
-  const activeConv = convs.find((c) => c.id === activeId)
+  const activeConv = convs.find((c) => c.id === activeId) ?? convs[0]
+  const activeModel = saved.find((m) => modelKey(m.provider, m.id) === active)
+  const apiKey = activeModel ? keys[activeModel.provider] : undefined
 
   const go = (next: Page) => {
     setPage(next)
@@ -56,20 +57,45 @@ export default function App() {
     setActiveId(id)
     go("chat")
   }
-  const newChat = () => {
-    const conv = { id: crypto.randomUUID(), title: "New chat" }
-    setConvs((prev) => [conv, ...prev])
-    select(conv.id)
+  const startChat = () => {
+    newChat()
+    go("chat")
   }
 
   const options: ModelOption[] = saved.map((m) => ({
     id: modelKey(m.provider, m.id),
     name: m.name,
     group: m.provider,
+    icon: (
+      <ModelLogo
+        providerId={m.provider}
+        modelId={m.id}
+        name={m.name}
+        className="size-4"
+      />
+    ),
   }))
   const groups = PROVIDERS.filter((p) =>
     saved.some((m) => m.provider === p.id)
-  ).map((p) => ({ id: p.id, label: p.name }))
+  ).map((p) => ({
+    id: p.id,
+    label: p.name,
+    icon: <ProviderLogo provider={p} className="size-4" />,
+  }))
+
+  const picker = saved.length ? (
+    <ModelPicker
+      options={options}
+      groups={groups}
+      value={active ?? undefined}
+      onChange={settings.setActive}
+      side="top"
+    />
+  ) : (
+    <Button variant="outline" size="sm" onClick={() => go("models")}>
+      Add models
+    </Button>
+  )
 
   const pageClass = (p: Page) =>
     p === page ? "bg-sidebar-accent" : undefined
@@ -84,7 +110,7 @@ export default function App() {
         <>
           <SideRow
             icon={<MessageSquarePlus className="size-4" />}
-            onClick={newChat}
+            onClick={startChat}
           >
             New chat
           </SideRow>
@@ -106,7 +132,7 @@ export default function App() {
       }
       rail={
         <>
-          <SideIconBtn label="New chat" onClick={newChat}>
+          <SideIconBtn label="New chat" onClick={startChat}>
             <MessageSquarePlus className="size-4" />
           </SideIconBtn>
           <SideIconBtn label="Providers" onClick={() => go("providers")}>
@@ -146,7 +172,7 @@ export default function App() {
       ? "Providers"
       : page === "models"
         ? "Models"
-        : activeConv?.title
+        : activeConv.title
 
   return (
     <div className="flex h-dvh w-full overflow-hidden bg-background text-foreground">
@@ -176,36 +202,23 @@ export default function App() {
               </SideIconBtn>
             ) : undefined
           }
-          right={
-            <>
-              {page === "chat" ? (
-                saved.length ? (
-                  <ModelPicker
-                    options={options}
-                    groups={groups}
-                    value={active ?? undefined}
-                    onChange={settings.setActive}
-                    efforts={false}
-                    side="bottom"
-                  />
-                ) : (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => go("models")}
-                  >
-                    Add models
-                  </Button>
-                )
-              ) : null}
-              <ThemeToggle floating={false} />
-            </>
-          }
+          right={<ThemeToggle floating={false} />}
         />
 
-        {/* Chat stays mounted so switching pages doesn't lose the conversation. */}
+        {/* Chat stays mounted so switching pages doesn't lose the draft. */}
         <div className={page === "chat" ? "min-h-0 flex-1" : "hidden"}>
-          <Chat key={activeId} />
+          <Chat
+            key={activeConv.id}
+            conversationKey={activeConv.id}
+            messages={activeConv.messages}
+            isGenerating={activeConv.generating}
+            generationStartedAt={activeConv.startedAt}
+            onSend={(text) =>
+              send(activeConv.id, text, { model: activeModel, apiKey })
+            }
+            onStop={() => stop(activeConv.id)}
+            tools={picker}
+          />
         </div>
         {page === "providers" ? (
           <div className="min-h-0 flex-1 overflow-y-auto">

@@ -8,7 +8,7 @@ import {
   Wrench,
 } from "lucide-react"
 
-import { ProviderLogo } from "@/components/provider-logo"
+import { ModelLogo, ProviderLogo } from "@/components/provider-logo"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -30,6 +30,7 @@ import {
   ItemContent,
   ItemDescription,
   ItemGroup,
+  ItemMedia,
   ItemTitle,
 } from "@/components/ui/item"
 import {
@@ -72,6 +73,14 @@ function ModelRow({
 }) {
   return (
     <Item variant="outline">
+      <ItemMedia>
+        <ModelLogo
+          providerId={provider.id}
+          modelId={model.id}
+          name={model.name}
+          className="size-9"
+        />
+      </ItemMedia>
       <ItemContent>
         <ItemTitle>{model.name}</ItemTitle>
         <ItemDescription>{model.id}</ItemDescription>
@@ -118,10 +127,12 @@ function ModelRow({
               provider: provider.id,
               id: model.id,
               name: model.name,
+              reasoning: model.reasoning,
+              vision: model.vision,
             })
           }
         >
-          {added ? "Added" : "Add"}
+          <span key={added ? "added" : "add"}>{added ? "Added" : "Add"}</span>
         </Button>
       </ItemActions>
     </Item>
@@ -265,9 +276,15 @@ export function ModelsPage({ onOpenProviders }: { onOpenProviders: () => void })
             }}
           >
             <TabsList className="w-full">
-              <TabsTrigger value="all">All {counts.all}</TabsTrigger>
-              <TabsTrigger value="free">Free {counts.free}</TabsTrigger>
-              <TabsTrigger value="paid">Paid {counts.paid}</TabsTrigger>
+              <TabsTrigger value="all">
+                All <span key={counts.all} translate="no">{counts.all}</span>
+              </TabsTrigger>
+              <TabsTrigger value="free">
+                Free <span key={counts.free} translate="no">{counts.free}</span>
+              </TabsTrigger>
+              <TabsTrigger value="paid">
+                Paid <span key={counts.paid} translate="no">{counts.paid}</span>
+              </TabsTrigger>
             </TabsList>
           </Tabs>
 

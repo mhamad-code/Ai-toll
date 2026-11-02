@@ -1,6 +1,13 @@
 import * as React from "react"
 
-export type SavedModel = { provider: string; id: string; name: string }
+export type SavedModel = {
+  provider: string
+  id: string
+  name: string
+  /** Whether the model can show its thinking (used to opt in where needed). */
+  reasoning?: boolean
+  vision?: boolean
+}
 
 type Settings = {
   /** API keys by provider id. They never leave this browser. */

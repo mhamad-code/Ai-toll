@@ -15,52 +15,55 @@ import { runLayoutTransition } from "@/lib/layout-transition"
 import { cn } from "@/lib/utils"
 
 const DEFAULT_SUGGESTIONS: PromptSuggestion[] = [
-  { id: "explain", label: "Explain what this project does" },
-  { id: "debug", label: "Help me track down a failing test" },
-  { id: "draft", label: "Draft release notes from my last commits" },
+  { id: "explain", label: "Explain a topic in simple terms" },
+  { id: "email", label: "Help me write a professional email" },
+  { id: "ideas", label: "Brainstorm ideas for a small app" },
 ]
 
-export type ChatProps = React.ComponentProps<"div"> & {
+export type ChatProps = Omit<React.ComponentProps<"div">, "onSend"> & {
+  messages: ChatMessageData[]
+  isGenerating?: boolean
+  generationStartedAt?: number
+  onSend: (text: string) => void
+  onStop?: () => void
+  /** Rendered next to the attach button, e.g. the model picker. */
+  tools?: React.ReactNode
   /** Headline above the composer while the conversation is empty. */
   greeting?: React.ReactNode
   /** Starter prompts listed under the centered composer. `[]` hides them. */
   suggestions?: PromptSuggestion[]
+  conversationKey?: string
 }
 
 /**
- * Starter chat layout. Wire `onSend` to your API and append assistant
- * messages when they stream in. Sidebar, navbar, and pickers are installed
- * as siblings — compose them around this block.
- *
- * Empty conversations open centered — greeting, composer, then suggestions.
- * The first send fades the opening chrome and slides the same composer to
- * the bottom, so the textarea keeps its focus and any half-typed draft.
+ * Controlled chat layout: the host owns the messages and streams into them.
+ * Empty conversations open centered; the first send slides the same composer
+ * to the bottom.
  */
 export function Chat({
+  messages,
+  isGenerating = false,
+  generationStartedAt,
+  onSend,
+  onStop,
+  tools,
   greeting = "How can I help?",
   suggestions = DEFAULT_SUGGESTIONS,
+  conversationKey,
   className,
   ...props
 }: ChatProps) {
-  const [messages, setMessages] = React.useState<ChatMessageData[]>([])
-  const [isGenerating, setIsGenerating] = React.useState(false)
   const isEmpty = messages.length === 0
 
-  const send = React.useCallback((text: string) => {
-    const value = text.trim()
-    if (!value) return
-    const commit = () => {
-      setMessages((prev) => [
-        ...prev,
-        { id: crypto.randomUUID(), content: value, sender: "user" },
-      ])
-      setIsGenerating(true)
-    }
-    if (messages.length === 0) runLayoutTransition(commit)
-    else commit()
-  }, [messages.length])
-
-  const stop = React.useCallback(() => setIsGenerating(false), [])
+  const send = React.useCallback(
+    (text: string) => {
+      const value = text.trim()
+      if (!value) return
+      if (messages.length === 0) runLayoutTransition(() => onSend(value))
+      else onSend(value)
+    },
+    [messages.length, onSend]
+  )
 
   return (
     <div
@@ -82,7 +85,12 @@ export function Chat({
           </h2>
         </div>
       ) : (
-        <MessageList messages={messages} isGenerating={isGenerating} />
+        <MessageList
+          messages={messages}
+          isGenerating={isGenerating}
+          generationStartedAt={generationStartedAt}
+          conversationKey={conversationKey}
+        />
       )}
 
       <div data-slot="chat-composer" className="w-full">
@@ -92,7 +100,8 @@ export function Chat({
             isEmpty && "pb-0 sm:pb-0"
           )}
           isGenerating={isGenerating}
-          onStop={stop}
+          onStop={onStop}
+          tools={tools}
           onSend={({ text }) => send(text)}
         />
         {isEmpty ? (
