@@ -1,7 +1,10 @@
 import * as React from "react"
-import { Menu, MessageSquarePlus } from "lucide-react"
+import { Boxes, KeyRound, Menu, MessageSquarePlus } from "lucide-react"
 
 import { Chat } from "@/components/chat"
+import { ModelsPage } from "@/components/models-page"
+import { ProvidersPage } from "@/components/providers-page"
+import { Button } from "@/components/ui/button"
 import { ChatNavbar } from "@/components/ui/chat-navbar"
 import {
   ChatSidebar,
@@ -11,14 +14,11 @@ import {
 } from "@/components/ui/chat-sidebar"
 import { ModelPicker, type ModelOption } from "@/components/ui/model-picker"
 import { ThemeToggle } from "@/components/ui/theme-toggle"
+import { PROVIDERS } from "@/lib/providers"
+import { modelKey, settings, useSettings } from "@/lib/store"
 
+type Page = "chat" | "providers" | "models"
 type Conv = { id: string; title: string }
-
-const MODELS: ModelOption[] = [
-  { id: "openai/gpt-4o-mini", name: "GPT-4o mini" },
-  { id: "anthropic/claude-sonnet-4.5", name: "Claude Sonnet" },
-  { id: "google/gemini-2.5-flash", name: "Gemini Flash" },
-]
 
 function useIsMobile() {
   const query = "(max-width: 767px)"
@@ -36,6 +36,8 @@ function useIsMobile() {
 
 export default function App() {
   const mobile = useIsMobile()
+  const { saved, active } = useSettings()
+  const [page, setPage] = React.useState<Page>("chat")
   const [collapsed, setCollapsed] = React.useState(false)
   const [open, setOpen] = React.useState(false)
   const [sectionOpen, setSectionOpen] = React.useState(true)
@@ -43,19 +45,34 @@ export default function App() {
     { id: crypto.randomUUID(), title: "New chat" },
   ])
   const [activeId, setActiveId] = React.useState(() => convs[0].id)
-  const [model, setModel] = React.useState(MODELS[0].id)
 
-  const active = convs.find((c) => c.id === activeId)
+  const activeConv = convs.find((c) => c.id === activeId)
 
+  const go = (next: Page) => {
+    setPage(next)
+    setOpen(false)
+  }
   const select = (id: string) => {
     setActiveId(id)
-    setOpen(false)
+    go("chat")
   }
   const newChat = () => {
     const conv = { id: crypto.randomUUID(), title: "New chat" }
     setConvs((prev) => [conv, ...prev])
     select(conv.id)
   }
+
+  const options: ModelOption[] = saved.map((m) => ({
+    id: modelKey(m.provider, m.id),
+    name: m.name,
+    group: m.provider,
+  }))
+  const groups = PROVIDERS.filter((p) =>
+    saved.some((m) => m.provider === p.id)
+  ).map((p) => ({ id: p.id, label: p.name }))
+
+  const pageClass = (p: Page) =>
+    p === page ? "bg-sidebar-accent" : undefined
 
   const sidebar = (
     <ChatSidebar
@@ -64,17 +81,41 @@ export default function App() {
       width={mobile ? "100%" : undefined}
       brand={<span className="px-1 text-sm font-semibold">Ai Tool</span>}
       nav={
-        <SideRow
-          icon={<MessageSquarePlus className="size-4" />}
-          onClick={newChat}
-        >
-          New chat
-        </SideRow>
+        <>
+          <SideRow
+            icon={<MessageSquarePlus className="size-4" />}
+            onClick={newChat}
+          >
+            New chat
+          </SideRow>
+          <SideRow
+            icon={<KeyRound className="size-4" />}
+            className={pageClass("providers")}
+            onClick={() => go("providers")}
+          >
+            Providers
+          </SideRow>
+          <SideRow
+            icon={<Boxes className="size-4" />}
+            className={pageClass("models")}
+            onClick={() => go("models")}
+          >
+            Models
+          </SideRow>
+        </>
       }
       rail={
-        <SideIconBtn label="New chat" onClick={newChat}>
-          <MessageSquarePlus className="size-4" />
-        </SideIconBtn>
+        <>
+          <SideIconBtn label="New chat" onClick={newChat}>
+            <MessageSquarePlus className="size-4" />
+          </SideIconBtn>
+          <SideIconBtn label="Providers" onClick={() => go("providers")}>
+            <KeyRound className="size-4" />
+          </SideIconBtn>
+          <SideIconBtn label="Models" onClick={() => go("models")}>
+            <Boxes className="size-4" />
+          </SideIconBtn>
+        </>
       }
     >
       <SidebarCollapsibleSection
@@ -86,7 +127,11 @@ export default function App() {
         {convs.map((c) => (
           <SideRow
             key={c.id}
-            className={c.id === activeId ? "bg-sidebar-accent" : undefined}
+            className={
+              page === "chat" && c.id === activeId
+                ? "bg-sidebar-accent"
+                : undefined
+            }
             onClick={() => select(c.id)}
           >
             {c.title}
@@ -95,6 +140,13 @@ export default function App() {
       </SidebarCollapsibleSection>
     </ChatSidebar>
   )
+
+  const title =
+    page === "providers"
+      ? "Providers"
+      : page === "models"
+        ? "Models"
+        : activeConv?.title
 
   return (
     <div className="flex h-dvh w-full overflow-hidden bg-background text-foreground">
@@ -116,7 +168,7 @@ export default function App() {
 
       <div className="flex min-w-0 flex-1 flex-col">
         <ChatNavbar
-          title={active?.title}
+          title={title}
           left={
             mobile ? (
               <SideIconBtn label="Open sidebar" onClick={() => setOpen(true)}>
@@ -126,19 +178,45 @@ export default function App() {
           }
           right={
             <>
-              <ModelPicker
-                options={MODELS}
-                value={model}
-                onChange={setModel}
-                side="bottom"
-              />
+              {page === "chat" ? (
+                saved.length ? (
+                  <ModelPicker
+                    options={options}
+                    groups={groups}
+                    value={active ?? undefined}
+                    onChange={settings.setActive}
+                    efforts={false}
+                    side="bottom"
+                  />
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => go("models")}
+                  >
+                    Add models
+                  </Button>
+                )
+              ) : null}
               <ThemeToggle floating={false} />
             </>
           }
         />
-        <div className="min-h-0 flex-1">
+
+        {/* Chat stays mounted so switching pages doesn't lose the conversation. */}
+        <div className={page === "chat" ? "min-h-0 flex-1" : "hidden"}>
           <Chat key={activeId} />
         </div>
+        {page === "providers" ? (
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <ProvidersPage />
+          </div>
+        ) : null}
+        {page === "models" ? (
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <ModelsPage onOpenProviders={() => go("providers")} />
+          </div>
+        ) : null}
       </div>
     </div>
   )
