@@ -48,6 +48,11 @@ export default function App() {
   const activeConv = convs.find((c) => c.id === activeId) ?? convs[0]
   const activeModel = saved.find((m) => modelKey(m.provider, m.id) === active)
   const apiKey = activeModel ? keys[activeModel.provider] : undefined
+  const lastMessage = activeConv.messages[activeConv.messages.length - 1]
+  const pendingQuestions =
+    !activeConv.generating && lastMessage && activeConv.questions[lastMessage.id]
+      ? { id: lastMessage.id, items: activeConv.questions[lastMessage.id] }
+      : null
 
   const go = (next: Page) => {
     setPage(next)
@@ -218,6 +223,7 @@ export default function App() {
             }
             onStop={() => stop(activeConv.id)}
             tools={picker}
+            pendingQuestions={pendingQuestions}
           />
         </div>
         {page === "providers" ? (

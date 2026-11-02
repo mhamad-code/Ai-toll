@@ -44,6 +44,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { fetchModels, type ModelInfo } from "@/lib/models"
 import { PROVIDERS, type Provider } from "@/lib/providers"
 import { modelKey, settings, useSettings } from "@/lib/store"
+import { HOVER_SHADOW } from "@/lib/ui"
 
 type Tab = "all" | "free" | "paid"
 
@@ -72,7 +73,7 @@ function ModelRow({
   added: boolean
 }) {
   return (
-    <Item variant="outline">
+    <Item variant="outline" className={HOVER_SHADOW}>
       <ItemMedia>
         <ModelLogo
           providerId={provider.id}
@@ -121,6 +122,7 @@ function ModelRow({
       <ItemActions>
         <Button
           size="sm"
+          className={HOVER_SHADOW}
           variant={added ? "secondary" : "outline"}
           onClick={() =>
             settings.toggleSaved({

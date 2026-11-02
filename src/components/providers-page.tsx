@@ -27,6 +27,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { PROVIDERS, type Provider } from "@/lib/providers"
 import { settings, useSettings } from "@/lib/store"
+import { HOVER_SHADOW } from "@/lib/ui"
 
 function ProviderCard({ provider }: { provider: Provider }) {
   const { keys } = useSettings()
@@ -48,7 +49,7 @@ function ProviderCard({ provider }: { provider: Provider }) {
   }
 
   return (
-    <Card>
+    <Card className={HOVER_SHADOW}>
       <CardHeader>
         <ProviderLogo provider={provider} className="mb-2 size-10" />
         <CardTitle>{provider.name}</CardTitle>
@@ -63,7 +64,7 @@ function ProviderCard({ provider }: { provider: Provider }) {
         <Dialog open={open} onOpenChange={handleOpenChange}>
           <DialogTrigger
             render={
-              <Button variant="outline">
+              <Button variant="outline" className={HOVER_SHADOW}>
                 <KeyRound />
                 {savedKey ? "Edit key" : "Add key"}
               </Button>

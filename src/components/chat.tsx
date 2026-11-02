@@ -2,6 +2,7 @@
 
 import * as React from "react"
 
+import { ClarifyQuestions } from "@/components/clarify-questions"
 import { ChatInput } from "@/components/ui/chat-input"
 import {
   MessageList,
@@ -11,6 +12,7 @@ import {
   PromptSuggestions,
   type PromptSuggestion,
 } from "@/components/ui/prompt-suggestions"
+import type { QuestionSpec } from "@/lib/clarify"
 import { runLayoutTransition } from "@/lib/layout-transition"
 import { cn } from "@/lib/utils"
 
@@ -33,6 +35,8 @@ export type ChatProps = Omit<React.ComponentProps<"div">, "onSend"> & {
   /** Starter prompts listed under the centered composer. `[]` hides them. */
   suggestions?: PromptSuggestion[]
   conversationKey?: string
+  /** Clarifying questions waiting for an answer; shown above the composer. */
+  pendingQuestions?: { id: string; items: QuestionSpec[] } | null
 }
 
 /**
@@ -50,6 +54,7 @@ export function Chat({
   greeting = "How can I help?",
   suggestions = DEFAULT_SUGGESTIONS,
   conversationKey,
+  pendingQuestions,
   className,
   ...props
 }: ChatProps) {
@@ -92,6 +97,16 @@ export function Chat({
           conversationKey={conversationKey}
         />
       )}
+
+      {pendingQuestions ? (
+        <div className="mx-auto w-full max-w-3xl px-4 pb-3 sm:px-6">
+          <ClarifyQuestions
+            key={pendingQuestions.id}
+            questions={pendingQuestions.items}
+            onAnswer={send}
+          />
+        </div>
+      ) : null}
 
       <div data-slot="chat-composer" className="w-full">
         <ChatInput

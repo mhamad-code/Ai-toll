@@ -2,6 +2,7 @@ import * as React from "react"
 
 import type { ChatMessageData } from "@/components/ui/message-list"
 import { streamChat, type ChatTurn } from "@/lib/chat-stream"
+import { SYSTEM_PROMPT, detectQuestions, type QuestionSpec } from "@/lib/clarify"
 import { providerById } from "@/lib/providers"
 import type { SavedModel } from "@/lib/store"
 
@@ -11,6 +12,10 @@ export type Conv = {
   messages: ChatMessageData[]
   generating: boolean
   startedAt?: number
+  /** Questions the assistant asked, by message id. */
+  questions: Record<string, QuestionSpec[]>
+  /** What the model actually wrote for messages shown differently. */
+  raw: Record<string, string>
 }
 
 export type SendContext = {
@@ -26,17 +31,23 @@ const newConv = (): Conv => ({
   title: "New chat",
   messages: [],
   generating: false,
+  questions: {},
+  raw: {},
 })
 
-function toTurns(messages: ChatMessageData[]): ChatTurn[] {
+function toTurns(
+  messages: ChatMessageData[],
+  raw: Record<string, string>
+): ChatTurn[] {
   const turns: ChatTurn[] = []
   for (const message of messages) {
-    if (!message.content.trim()) continue
-    if (message.content.startsWith(ERROR_PREFIX)) continue
+    const content = raw[message.id] ?? message.content
+    if (!content.trim()) continue
+    if (content.startsWith(ERROR_PREFIX)) continue
     const role = message.sender === "user" ? "user" : "assistant"
     const last = turns[turns.length - 1]
-    if (last && last.role === role) last.content += `\n\n${message.content}`
-    else turns.push({ role, content: message.content })
+    if (last && last.role === role) last.content += `\n\n${content}`
+    else turns.push({ role, content })
   }
   while (turns.length && turns[0].role !== "user") turns.shift()
   return turns
@@ -126,12 +137,16 @@ export function useChats() {
       let timer: ReturnType<typeof setTimeout> | null = null
       let failure: string | null = null
 
-      const render = () => {
+      const render = (final = false) => {
         timer = null
+        const detected = detectQuestions(content)
+        // The form is still arriving: keep the waiting indicator instead.
+        if (detected.status === "open" && !final) return
+        const ready = detected.status === "ready" ? detected : null
         const message: ChatMessageData = {
           id: assistantId,
           sender: "assistant",
-          content,
+          content: ready ? ready.text || "A few quick questions:" : content,
           reasoning: reasoning || null,
           reasoningDuration: reasoningSeconds || undefined,
         }
@@ -140,10 +155,14 @@ export function useChats() {
           messages: c.messages.some((m) => m.id === assistantId)
             ? c.messages.map((m) => (m.id === assistantId ? message : m))
             : [...c.messages, message],
+          questions: ready
+            ? { ...c.questions, [assistantId]: ready.questions }
+            : c.questions,
+          raw: ready ? { ...c.raw, [assistantId]: content } : c.raw,
         }))
       }
       const schedule = () => {
-        if (timer === null) timer = setTimeout(render, 50)
+        if (timer === null) timer = setTimeout(() => render(), 50)
       }
 
       try {
@@ -151,7 +170,8 @@ export function useChats() {
           provider,
           model: ctx.model.id,
           apiKey: ctx.apiKey,
-          turns: toTurns(history),
+          turns: toTurns(history, conv.raw),
+          system: SYSTEM_PROMPT,
           reasoning: ctx.model.reasoning ?? false,
           signal: controller.signal,
         })) {
@@ -179,7 +199,7 @@ export function useChats() {
       if (reasoning && !content && !reasoningSeconds) {
         reasoningSeconds = (Date.now() - reasoningStart) / 1000
       }
-      if (content || reasoning) render()
+      if (content || reasoning) render(true)
       if (failure) appendAssistant(id, `${ERROR_PREFIX}${failure}`)
       patch(id, (c) => ({ ...c, generating: false }))
     },

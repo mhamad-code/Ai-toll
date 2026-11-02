@@ -11,6 +11,8 @@ export type StreamRequest = {
   model: string
   apiKey: string
   turns: ChatTurn[]
+  /** Instructions that apply to the whole conversation. */
+  system?: string
   /** Ask for visible thinking when the provider needs an opt-in. */
   reasoning: boolean
   signal: AbortSignal
@@ -145,9 +147,11 @@ async function* openaiCompatible({
   model,
   apiKey,
   turns,
+  system,
   signal,
 }: StreamRequest): AsyncGenerator<StreamEvent> {
-  const body: Record<string, unknown> = { model, messages: turns, stream: true }
+  const messages = system ? [{ role: "system", content: system }, ...turns] : turns
+  const body: Record<string, unknown> = { model, messages, stream: true }
   if (provider.kind === "openrouter") body.include_reasoning = true
 
   const res = await fetch(`${provider.baseURL}/chat/completions`, {
@@ -193,6 +197,7 @@ async function* anthropic({
   model,
   apiKey,
   turns,
+  system,
   signal,
 }: StreamRequest): AsyncGenerator<StreamEvent> {
   const res = await fetch(`${provider.baseURL}/messages`, {
@@ -209,6 +214,7 @@ async function* anthropic({
       max_tokens: 4096,
       stream: true,
       messages: turns,
+      ...(system ? { system } : {}),
     }),
   })
   if (!res.ok) throw await failure(res, provider.name)
@@ -242,6 +248,7 @@ async function* google({
   model,
   apiKey,
   turns,
+  system,
   reasoning,
   signal,
 }: StreamRequest): AsyncGenerator<StreamEvent> {
@@ -254,6 +261,7 @@ async function* google({
       parts: [{ text: turn.content }],
     })),
   }
+  if (system) body.systemInstruction = { parts: [{ text: system }] }
   if (reasoning) {
     body.generationConfig = { thinkingConfig: { includeThoughts: true } }
   }
