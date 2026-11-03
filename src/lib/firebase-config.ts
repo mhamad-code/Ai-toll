@@ -1,10 +1,4 @@
-git add -A git commit -m "Add Firebase login and signup [skip 
-ci]" git push sleep 8 gh workflow run add-firebase.yml --ref 
-main sleep 10 gh run watch $(gh run list --workflow 
-add-firebase.yml --limit 1 --json databaseId -q 
-'.[0].databaseId') sleep 15 gh run watch $(gh run list 
---workflow deploy.yml --limit 1 --json databaseId -q 
-'.[0].databaseId')/**
+/**
 git pull * Paste your Firebase web app config here.
  *
  * Firebase console → Project settings → General → Your apps → Web app →
