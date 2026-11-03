@@ -5,12 +5,17 @@ import {
   LoaderCircle,
   Menu,
   MessageSquarePlus,
+  Plug,
   UserRound,
 } from "lucide-react"
 
 import { AccountPage } from "@/components/account-page"
+import { ApprovalDialog } from "@/components/approval-dialog"
 import { AuthPage } from "@/components/auth-page"
 import { Chat } from "@/components/chat"
+import { citationHandlers } from "@/components/citation"
+import { ConnectorsMenu } from "@/components/connectors-menu"
+import { ConnectorsPage } from "@/components/connectors-page"
 import { ModelsPage } from "@/components/models-page"
 import { ModelLogo, ProviderLogo } from "@/components/provider-logo"
 import { ProvidersPage } from "@/components/providers-page"
@@ -25,11 +30,12 @@ import {
 import { ModelPicker, type ModelOption } from "@/components/ui/model-picker"
 import { ThemeToggle } from "@/components/ui/theme-toggle"
 import { isFirebaseConfigured, useAuth } from "@/lib/auth"
+import { handleOAuthReturn } from "@/lib/connectors/runtime"
 import { PROVIDERS } from "@/lib/providers"
 import { modelKey, settings, useSettings } from "@/lib/store"
 import { useChats } from "@/lib/use-chats"
 
-type Page = "chat" | "providers" | "models" | "account"
+type Page = "chat" | "providers" | "models" | "connectors" | "account"
 
 function useIsMobile() {
   const query = "(max-width: 767px)"
@@ -55,6 +61,12 @@ export default function App() {
   const [collapsed, setCollapsed] = React.useState(false)
   const [open, setOpen] = React.useState(false)
   const [sectionOpen, setSectionOpen] = React.useState(true)
+
+  React.useEffect(() => {
+    void handleOAuthReturn().then((handled) => {
+      if (handled) setPage("connectors")
+    })
+  }, [])
 
   const activeConv = convs.find((c) => c.id === activeId) ?? convs[0]
   const activeModel = saved.find((m) => modelKey(m.provider, m.id) === active)
@@ -99,7 +111,7 @@ export default function App() {
     icon: <ProviderLogo provider={p} className="size-4" />,
   }))
 
-  const picker = saved.length ? (
+  const modelPicker = saved.length ? (
     <ModelPicker
       options={options}
       groups={groups}
@@ -111,6 +123,13 @@ export default function App() {
     <Button variant="outline" size="sm" onClick={() => go("models")}>
       Add models
     </Button>
+  )
+
+  const picker = (
+    <>
+      <ConnectorsMenu onOpenPage={() => go("connectors")} />
+      {modelPicker}
+    </>
   )
 
   const pageClass = (p: Page) =>
@@ -145,6 +164,13 @@ export default function App() {
             Models
           </SideRow>
           <SideRow
+            icon={<Plug className="size-4" />}
+            className={pageClass("connectors")}
+            onClick={() => go("connectors")}
+          >
+            Connectors
+          </SideRow>
+          <SideRow
             icon={<UserRound className="size-4" />}
             className={pageClass("account")}
             onClick={() => go("account")}
@@ -163,6 +189,9 @@ export default function App() {
           </SideIconBtn>
           <SideIconBtn label="Models" onClick={() => go("models")}>
             <Boxes className="size-4" />
+          </SideIconBtn>
+          <SideIconBtn label="Connectors" onClick={() => go("connectors")}>
+            <Plug className="size-4" />
           </SideIconBtn>
           <SideIconBtn label="Account" onClick={() => go("account")}>
             <UserRound className="size-4" />
@@ -198,9 +227,11 @@ export default function App() {
       ? "Providers"
       : page === "models"
         ? "Models"
-        : page === "account"
-          ? "Account"
-          : activeConv.title
+        : page === "connectors"
+          ? "Connectors"
+          : page === "account"
+            ? "Account"
+            : activeConv.title
 
   if (isFirebaseConfigured && loading) {
     return (
@@ -213,6 +244,7 @@ export default function App() {
 
   return (
     <div className="flex h-dvh w-full overflow-hidden bg-background text-foreground">
+      <ApprovalDialog />
       {mobile ? (
         open ? (
           <>
@@ -256,11 +288,17 @@ export default function App() {
             onStop={() => stop(activeConv.id)}
             tools={picker}
             pendingQuestions={pendingQuestions}
+            patternHandlers={citationHandlers}
           />
         </div>
         {page === "providers" ? (
           <div className="min-h-0 flex-1 overflow-y-auto">
             <ProvidersPage />
+          </div>
+        ) : null}
+        {page === "connectors" ? (
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <ConnectorsPage />
           </div>
         ) : null}
         {page === "account" ? (

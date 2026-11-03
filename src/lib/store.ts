@@ -7,6 +7,8 @@ export type SavedModel = {
   /** Whether the model can show its thinking (used to opt in where needed). */
   reasoning?: boolean
   vision?: boolean
+  /** Whether the model can call tools (connectors). */
+  tools?: boolean
 }
 
 type Settings = {

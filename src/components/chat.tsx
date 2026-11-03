@@ -8,6 +8,7 @@ import {
   MessageList,
   type ChatMessageData,
 } from "@/components/ui/message-list"
+import type { PatternHandler } from "@/components/ui/message"
 import {
   PromptSuggestions,
   type PromptSuggestion,
@@ -37,6 +38,8 @@ export type ChatProps = Omit<React.ComponentProps<"div">, "onSend"> & {
   conversationKey?: string
   /** Clarifying questions waiting for an answer; shown above the composer. */
   pendingQuestions?: { id: string; items: QuestionSpec[] } | null
+  /** Inline renderers for text patterns, e.g. citations. */
+  patternHandlers?: PatternHandler[]
 }
 
 /**
@@ -55,6 +58,7 @@ export function Chat({
   suggestions = DEFAULT_SUGGESTIONS,
   conversationKey,
   pendingQuestions,
+  patternHandlers,
   className,
   ...props
 }: ChatProps) {
@@ -95,6 +99,7 @@ export function Chat({
           isGenerating={isGenerating}
           generationStartedAt={generationStartedAt}
           conversationKey={conversationKey}
+          patternHandlers={patternHandlers}
         />
       )}
 

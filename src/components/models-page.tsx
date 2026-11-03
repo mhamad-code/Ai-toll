@@ -131,6 +131,7 @@ function ModelRow({
               name: model.name,
               reasoning: model.reasoning,
               vision: model.vision,
+              tools: model.tools,
             })
           }
         >

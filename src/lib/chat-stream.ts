@@ -1,18 +1,40 @@
 import type { Provider } from "@/lib/providers"
 
-export type ChatTurn = { role: "user" | "assistant"; content: string }
+export type ToolSpec = {
+  name: string
+  description: string
+  parameters: Record<string, unknown>
+}
+
+export type ToolCall = { id: string; name: string; arguments: string }
+
+export type ApiMessage =
+  | { role: "user"; content: string }
+  | {
+      role: "assistant"
+      content: string | null
+      tool_calls?: {
+        id: string
+        type: "function"
+        function: { name: string; arguments: string }
+      }[]
+    }
+  | { role: "tool"; tool_call_id: string; content: string }
 
 export type StreamEvent =
   | { type: "text"; delta: string }
   | { type: "reasoning"; delta: string }
+  | { type: "tool_calls"; calls: ToolCall[] }
 
 export type StreamRequest = {
   provider: Provider
   model: string
   apiKey: string
-  turns: ChatTurn[]
+  messages: ApiMessage[]
   /** Instructions that apply to the whole conversation. */
   system?: string
+  /** Tools the model may call (OpenAI-compatible providers). */
+  tools?: ToolSpec[]
   /** Ask for visible thinking when the provider needs an opt-in. */
   reasoning: boolean
   signal: AbortSignal
@@ -34,6 +56,21 @@ export async function* streamChat(
 }
 
 /* ---------------------------------------------------------------- helpers */
+
+/** Anthropic and Gemini get the plain conversation, without tool exchanges. */
+function plainTurns(messages: ApiMessage[]) {
+  const turns: { role: "user" | "assistant"; content: string }[] = []
+  for (const m of messages) {
+    if (
+      (m.role === "user" || m.role === "assistant") &&
+      typeof m.content === "string" &&
+      m.content
+    ) {
+      turns.push({ role: m.role, content: m.content })
+    }
+  }
+  return turns
+}
 
 async function* readSSE(res: Response): AsyncGenerator<string> {
   if (!res.body) throw new Error("The provider sent an empty response.")
@@ -84,7 +121,7 @@ async function failure(res: Response, name: string): Promise<Error> {
 }
 
 /** Some models write their thinking inline as <think>…</think>. */
-function createThinkSplitter() {
+export function createThinkSplitter() {
   const OPEN = "<think>"
   const CLOSE = "</think>"
   let inThink = false
@@ -138,6 +175,11 @@ type OpenAIChunk = {
       content?: string | null
       reasoning?: string | null
       reasoning_content?: string | null
+      tool_calls?: {
+        index?: number
+        id?: string
+        function?: { name?: string; arguments?: string }
+      }[]
     }
   }[]
 }
@@ -146,13 +188,23 @@ async function* openaiCompatible({
   provider,
   model,
   apiKey,
-  turns,
+  messages,
   system,
+  tools,
   signal,
 }: StreamRequest): AsyncGenerator<StreamEvent> {
-  const messages = system ? [{ role: "system", content: system }, ...turns] : turns
-  const body: Record<string, unknown> = { model, messages, stream: true }
+  const body: Record<string, unknown> = {
+    model,
+    messages: system ? [{ role: "system", content: system }, ...messages] : messages,
+    stream: true,
+  }
   if (provider.kind === "openrouter") body.include_reasoning = true
+  if (tools?.length) {
+    body.tools = tools.map((t) => ({
+      type: "function",
+      function: { name: t.name, description: t.description, parameters: t.parameters },
+    }))
+  }
 
   const res = await fetch(`${provider.baseURL}/chat/completions`, {
     method: "POST",
@@ -166,6 +218,8 @@ async function* openaiCompatible({
   if (!res.ok) throw await failure(res, provider.name)
 
   const think = createThinkSplitter()
+  const calls = new Map<number, { id: string; name: string; args: string }>()
+
   for await (const data of readSSE(res)) {
     if (data === "[DONE]") break
     const chunk = parse<OpenAIChunk>(data)
@@ -173,6 +227,7 @@ async function* openaiCompatible({
     if (chunk.error) throw new Error(chunk.error.message ?? "Stream error")
     const delta = chunk.choices?.[0]?.delta
     if (!delta) continue
+
     const reasoning = delta.reasoning ?? delta.reasoning_content
     if (typeof reasoning === "string" && reasoning) {
       yield { type: "reasoning", delta: reasoning }
@@ -180,8 +235,30 @@ async function* openaiCompatible({
     if (typeof delta.content === "string" && delta.content) {
       yield* think.push(delta.content)
     }
+    for (const piece of delta.tool_calls ?? []) {
+      const index =
+        piece.index ?? (piece.id ? calls.size : Math.max(calls.size - 1, 0))
+      const entry = calls.get(index) ?? { id: "", name: "", args: "" }
+      if (piece.id) entry.id = piece.id
+      if (piece.function?.name && !entry.name) entry.name = piece.function.name
+      if (piece.function?.arguments) entry.args += piece.function.arguments
+      calls.set(index, entry)
+    }
   }
   yield* think.flush()
+
+  if (calls.size) {
+    yield {
+      type: "tool_calls",
+      calls: [...calls.entries()]
+        .sort((a, b) => a[0] - b[0])
+        .map(([, e], i) => ({
+          id: e.id || `call_${i}`,
+          name: e.name,
+          arguments: e.args || "{}",
+        })),
+    }
+  }
 }
 
 /* -------------------------------------------------------------- Anthropic */
@@ -196,7 +273,7 @@ async function* anthropic({
   provider,
   model,
   apiKey,
-  turns,
+  messages,
   system,
   signal,
 }: StreamRequest): AsyncGenerator<StreamEvent> {
@@ -213,7 +290,7 @@ async function* anthropic({
       model,
       max_tokens: 4096,
       stream: true,
-      messages: turns,
+      messages: plainTurns(messages),
       ...(system ? { system } : {}),
     }),
   })
@@ -247,7 +324,7 @@ async function* google({
   provider,
   model,
   apiKey,
-  turns,
+  messages,
   system,
   reasoning,
   signal,
@@ -256,7 +333,7 @@ async function* google({
     `${provider.baseURL}/models/${encodeURIComponent(model)}:streamGenerateContent` +
     `?alt=sse&key=${encodeURIComponent(apiKey)}`
   const body: Record<string, unknown> = {
-    contents: turns.map((turn) => ({
+    contents: plainTurns(messages).map((turn) => ({
       role: turn.role === "assistant" ? "model" : "user",
       parts: [{ text: turn.content }],
     })),

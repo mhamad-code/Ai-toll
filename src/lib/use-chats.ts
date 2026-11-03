@@ -1,8 +1,18 @@
 import * as React from "react"
 
 import type { ChatMessageData } from "@/components/ui/message-list"
-import { streamChat, type ChatTurn } from "@/lib/chat-stream"
-import { SYSTEM_PROMPT, detectQuestions, type QuestionSpec } from "@/lib/clarify"
+import type { MessageToolCallData } from "@/components/ui/message-parts"
+import { requestApproval } from "@/lib/approvals"
+import {
+  streamChat,
+  type ApiMessage,
+  type ToolCall,
+  type ToolSpec,
+} from "@/lib/chat-stream"
+import { detectQuestions, type QuestionSpec } from "@/lib/clarify"
+import { loadTools } from "@/lib/connectors/runtime"
+import type { RuntimeTool } from "@/lib/connectors/types"
+import { buildSystemPrompt } from "@/lib/prompt"
 import { providerById } from "@/lib/providers"
 import type { SavedModel } from "@/lib/store"
 
@@ -25,6 +35,7 @@ export type SendContext = {
 
 /** Assistant messages that report a problem start with this and stay out of the history. */
 const ERROR_PREFIX = "⚠️ "
+const MAX_STEPS = 8
 
 const newConv = (): Conv => ({
   id: crypto.randomUUID(),
@@ -35,11 +46,11 @@ const newConv = (): Conv => ({
   raw: {},
 })
 
-function toTurns(
+function toApiMessages(
   messages: ChatMessageData[],
   raw: Record<string, string>
-): ChatTurn[] {
-  const turns: ChatTurn[] = []
+): ApiMessage[] {
+  const turns: { role: "user" | "assistant"; content: string }[] = []
   for (const message of messages) {
     const content = raw[message.id] ?? message.content
     if (!content.trim()) continue
@@ -51,6 +62,17 @@ function toTurns(
   }
   while (turns.length && turns[0].role !== "user") turns.shift()
   return turns
+}
+
+function parseArgs(text: string): Record<string, unknown> {
+  try {
+    const value = JSON.parse(text || "{}") as unknown
+    return value && typeof value === "object" && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : {}
+  } catch {
+    return {}
+  }
 }
 
 export function useChats() {
@@ -129,11 +151,39 @@ export function useChats() {
       const controller = new AbortController()
       aborts.current.set(id, controller)
 
+      // Tools from the connectors that are switched on.
+      let runtimeTools: RuntimeTool[] = []
+      try {
+        runtimeTools = await loadTools()
+      } catch {
+        runtimeTools = []
+      }
+      const toolsSupported =
+        ctx.model.tools !== false &&
+        provider.kind !== "anthropic" &&
+        provider.kind !== "google"
+      if (runtimeTools.length && !toolsSupported) {
+        appendAssistant(
+          id,
+          `${ERROR_PREFIX}This model can't use connectors, so they are off for this reply. Pick a model with the Tools badge.`
+        )
+        runtimeTools = []
+      }
+      const byName = new Map(runtimeTools.map((t) => [t.name, t]))
+      const toolSpecs: ToolSpec[] = runtimeTools.map((t) => ({
+        name: t.name,
+        description: t.description,
+        parameters: t.parameters,
+      }))
+
       const assistantId = crypto.randomUUID()
+      const apiMessages = toApiMessages(history, conv.raw)
+      const toolUi: MessageToolCallData[] = []
       let content = ""
       let reasoning = ""
       let reasoningStart = 0
       let reasoningSeconds = 0
+      let needSeparator = false
       let timer: ReturnType<typeof setTimeout> | null = null
       let failure: string | null = null
 
@@ -149,6 +199,7 @@ export function useChats() {
           content: ready ? ready.text || "A few quick questions:" : content,
           reasoning: reasoning || null,
           reasoningDuration: reasoningSeconds || undefined,
+          tools: toolUi.length ? toolUi.map((t) => ({ ...t })) : undefined,
         }
         patch(id, (c) => ({
           ...c,
@@ -166,28 +217,96 @@ export function useChats() {
       }
 
       try {
-        for await (const event of streamChat({
-          provider,
-          model: ctx.model.id,
-          apiKey: ctx.apiKey,
-          turns: toTurns(history, conv.raw),
-          system: SYSTEM_PROMPT,
-          reasoning: ctx.model.reasoning ?? false,
-          signal: controller.signal,
-        })) {
-          if (event.type === "reasoning") {
-            if (!reasoning) reasoningStart = Date.now()
-            reasoning += event.delta
-          } else {
-            if (reasoning && !content) {
-              reasoningSeconds = (Date.now() - reasoningStart) / 1000
+        for (let step = 0; step < MAX_STEPS; step++) {
+          if (controller.signal.aborted) break
+          let calls: ToolCall[] = []
+          let stepText = ""
+
+          for await (const event of streamChat({
+            provider,
+            model: ctx.model.id,
+            apiKey: ctx.apiKey,
+            messages: apiMessages,
+            system: buildSystemPrompt(toolSpecs.length > 0),
+            tools: toolSpecs,
+            reasoning: ctx.model.reasoning ?? false,
+            signal: controller.signal,
+          })) {
+            if (event.type === "reasoning") {
+              if (!reasoning) reasoningStart = Date.now()
+              reasoning += event.delta
+            } else if (event.type === "text") {
+              if (reasoning && !content && !reasoningSeconds) {
+                reasoningSeconds = (Date.now() - reasoningStart) / 1000
+              }
+              if (needSeparator && content) content += "\n\n"
+              needSeparator = false
+              content += event.delta
+              stepText += event.delta
+            } else {
+              calls = event.calls
             }
-            content += event.delta
+            schedule()
           }
-          schedule()
+
+          if (!calls.length) break
+
+          apiMessages.push({
+            role: "assistant",
+            content: stepText || null,
+            tool_calls: calls.map((c) => ({
+              id: c.id,
+              type: "function",
+              function: { name: c.name, arguments: c.arguments },
+            })),
+          })
+
+          for (const call of calls) {
+            const tool = byName.get(call.name)
+            const entry: MessageToolCallData = {
+              id: call.id,
+              name: call.name,
+              status: "running",
+              input: call.arguments,
+            }
+            toolUi.push(entry)
+            schedule()
+
+            let output = ""
+            try {
+              if (!tool) throw new Error(`Unknown tool: ${call.name}`)
+              const args = parseArgs(call.arguments)
+              const allowed =
+                !tool.write ||
+                (await requestApproval({
+                  title: `${tool.connectorName}: ${tool.label}`,
+                  description: tool.description,
+                  args,
+                }))
+              if (allowed) {
+                output = await tool.run(args)
+                entry.status = "done"
+              } else {
+                output = "The user declined this action."
+                entry.status = "error"
+              }
+            } catch (error) {
+              output = `Error: ${error instanceof Error ? error.message : String(error)}`
+              entry.status = "error"
+            }
+            entry.output = output.slice(0, 4000)
+            apiMessages.push({
+              role: "tool",
+              tool_call_id: call.id,
+              content: output.slice(0, 20000),
+            })
+            schedule()
+          }
+          needSeparator = true
         }
       } catch (error) {
-        const aborted = error instanceof DOMException && error.name === "AbortError"
+        const aborted =
+          error instanceof DOMException && error.name === "AbortError"
         if (!aborted) {
           failure = error instanceof Error ? error.message : String(error)
         }
@@ -199,7 +318,7 @@ export function useChats() {
       if (reasoning && !content && !reasoningSeconds) {
         reasoningSeconds = (Date.now() - reasoningStart) / 1000
       }
-      if (content || reasoning) render(true)
+      if (content || reasoning || toolUi.length) render(true)
       if (failure) appendAssistant(id, `${ERROR_PREFIX}${failure}`)
       patch(id, (c) => ({ ...c, generating: false }))
     },

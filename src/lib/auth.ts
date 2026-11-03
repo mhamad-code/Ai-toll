@@ -5,7 +5,9 @@ import {
   GoogleAuthProvider,
   createUserWithEmailAndPassword,
   getAuth,
+  linkWithPopup,
   onAuthStateChanged,
+  reauthenticateWithPopup,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signInWithPopup,
@@ -43,6 +45,38 @@ export const signInWithGitHub = () => {
   const provider = new GithubAuthProvider()
   provider.addScope("user:email")
   return signInWithPopup(requireAuth(), provider)
+}
+
+/**
+ * Opens the provider's own consent window for extra permissions and returns
+ * the access token, so the user never pastes a key. If the account is already
+ * linked the window re-authorizes it; otherwise the provider gets linked.
+ */
+export async function signInWithOAuthToken(
+  kind: "github" | "google",
+  scopes: string[]
+): Promise<string> {
+  const firebase = requireAuth()
+  const provider =
+    kind === "github" ? new GithubAuthProvider() : new GoogleAuthProvider()
+  scopes.forEach((scope) => provider.addScope(scope))
+
+  const user = firebase.currentUser
+  const providerId = kind === "github" ? "github.com" : "google.com"
+  const result = !user
+    ? await signInWithPopup(firebase, provider)
+    : user.providerData.some((p) => p.providerId === providerId)
+      ? await reauthenticateWithPopup(user, provider)
+      : await linkWithPopup(user, provider)
+
+  const credential =
+    kind === "github"
+      ? GithubAuthProvider.credentialFromResult(result)
+      : GoogleAuthProvider.credentialFromResult(result)
+  if (!credential?.accessToken) {
+    throw new Error("The provider didn't return an access token.")
+  }
+  return credential.accessToken
 }
 
 export const resetPassword = (email: string) =>
@@ -99,6 +133,10 @@ export function describeAuthError(error: unknown): string | null {
       return "This sign-in method isn't enabled in Firebase yet."
     case "auth/unauthorized-domain":
       return "This site's domain isn't authorized in Firebase. Add it under Authentication → Settings → Authorized domains."
+    case "auth/credential-already-in-use":
+      return "That account is already linked to another user of this app."
+    case "auth/requires-recent-login":
+      return "Sign in again, then retry."
     case "auth/user-disabled":
       return "This account has been disabled."
     default:
