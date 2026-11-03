@@ -1,6 +1,15 @@
 import * as React from "react"
-import { Boxes, KeyRound, Menu, MessageSquarePlus } from "lucide-react"
+import {
+  Boxes,
+  KeyRound,
+  LoaderCircle,
+  Menu,
+  MessageSquarePlus,
+  UserRound,
+} from "lucide-react"
 
+import { AccountPage } from "@/components/account-page"
+import { AuthPage } from "@/components/auth-page"
 import { Chat } from "@/components/chat"
 import { ModelsPage } from "@/components/models-page"
 import { ModelLogo, ProviderLogo } from "@/components/provider-logo"
@@ -15,11 +24,12 @@ import {
 } from "@/components/ui/chat-sidebar"
 import { ModelPicker, type ModelOption } from "@/components/ui/model-picker"
 import { ThemeToggle } from "@/components/ui/theme-toggle"
+import { isFirebaseConfigured, useAuth } from "@/lib/auth"
 import { PROVIDERS } from "@/lib/providers"
 import { modelKey, settings, useSettings } from "@/lib/store"
 import { useChats } from "@/lib/use-chats"
 
-type Page = "chat" | "providers" | "models"
+type Page = "chat" | "providers" | "models" | "account"
 
 function useIsMobile() {
   const query = "(max-width: 767px)"
@@ -39,6 +49,7 @@ export default function App() {
   const mobile = useIsMobile()
   const { keys, saved, active } = useSettings()
   const { convs, activeId, setActiveId, newChat, send, stop } = useChats()
+  const { user, loading } = useAuth()
 
   const [page, setPage] = React.useState<Page>("chat")
   const [collapsed, setCollapsed] = React.useState(false)
@@ -133,6 +144,13 @@ export default function App() {
           >
             Models
           </SideRow>
+          <SideRow
+            icon={<UserRound className="size-4" />}
+            className={pageClass("account")}
+            onClick={() => go("account")}
+          >
+            Account
+          </SideRow>
         </>
       }
       rail={
@@ -145,6 +163,9 @@ export default function App() {
           </SideIconBtn>
           <SideIconBtn label="Models" onClick={() => go("models")}>
             <Boxes className="size-4" />
+          </SideIconBtn>
+          <SideIconBtn label="Account" onClick={() => go("account")}>
+            <UserRound className="size-4" />
           </SideIconBtn>
         </>
       }
@@ -177,7 +198,18 @@ export default function App() {
       ? "Providers"
       : page === "models"
         ? "Models"
-        : activeConv.title
+        : page === "account"
+          ? "Account"
+          : activeConv.title
+
+  if (isFirebaseConfigured && loading) {
+    return (
+      <div className="flex h-dvh items-center justify-center bg-background text-muted-foreground">
+        <LoaderCircle className="size-5 animate-spin" />
+      </div>
+    )
+  }
+  if (isFirebaseConfigured && !user) return <AuthPage />
 
   return (
     <div className="flex h-dvh w-full overflow-hidden bg-background text-foreground">
@@ -229,6 +261,11 @@ export default function App() {
         {page === "providers" ? (
           <div className="min-h-0 flex-1 overflow-y-auto">
             <ProvidersPage />
+          </div>
+        ) : null}
+        {page === "account" ? (
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <AccountPage user={user} />
           </div>
         ) : null}
         {page === "models" ? (
