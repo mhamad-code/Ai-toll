@@ -39,8 +39,11 @@ export const signUpWithEmail = (email: string, password: string) =>
 export const signInWithGoogle = () =>
   signInWithPopup(requireAuth(), new GoogleAuthProvider())
 
-export const signInWithGitHub = () =>
-  signInWithPopup(requireAuth(), new GithubAuthProvider())
+export const signInWithGitHub = () => {
+  const provider = new GithubAuthProvider()
+  provider.addScope("user:email")
+  return signInWithPopup(requireAuth(), provider)
+}
 
 export const resetPassword = (email: string) =>
   sendPasswordResetEmail(requireAuth(), email)
@@ -69,9 +72,10 @@ export function describeAuthError(error: unknown): string | null {
       : ""
 
   switch (code) {
-    case "auth/popup-closed-by-user":
     case "auth/cancelled-popup-request":
       return null
+    case "auth/popup-closed-by-user":
+      return "The sign-in window was closed before it finished. If it closed by itself, check the provider setup in Firebase."
     case "auth/invalid-credential":
     case "auth/invalid-login-credentials":
     case "auth/wrong-password":
