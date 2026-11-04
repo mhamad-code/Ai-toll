@@ -1,5 +1,7 @@
 import * as React from "react"
 
+import { onScopeChange, readItem, writeItem } from "@/lib/scope"
+
 export type SavedModel = {
   provider: string
   id: string
@@ -20,14 +22,12 @@ type Settings = {
   active: string | null
 }
 
-const STORAGE_KEY = "ai-toll:settings"
-
 export const modelKey = (provider: string, id: string) => `${provider}::${id}`
 
 function load(): Settings {
   const empty: Settings = { keys: {}, saved: [], active: null }
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw = readItem("settings")
     if (raw) return { ...empty, ...(JSON.parse(raw) as Partial<Settings>) }
   } catch {
     // Unreadable storage: start empty.
@@ -36,12 +36,15 @@ function load(): Settings {
 }
 
 let state: Settings = load()
+onScopeChange(() => {
+  state = load()
+})
 const listeners = new Set<() => void>()
 
 function commit(next: Settings) {
   state = next
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+    writeItem("settings", JSON.stringify(next))
   } catch {
     // Storage full or blocked: keep working in memory.
   }

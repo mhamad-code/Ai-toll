@@ -1,6 +1,7 @@
 import * as React from "react"
 
 import type { CustomConnector } from "@/lib/connectors/catalog"
+import { onScopeChange, readItem, removeItem, writeItem } from "@/lib/scope"
 
 type State = {
   connected: Record<string, boolean>
@@ -8,12 +9,10 @@ type State = {
   custom: CustomConnector[]
 }
 
-const KEY = "ai-toll:connectors"
-
 function load(): State {
   const empty: State = { connected: {}, enabled: {}, custom: [] }
   try {
-    const raw = localStorage.getItem(KEY)
+    const raw = readItem("connectors")
     if (raw) return { ...empty, ...(JSON.parse(raw) as Partial<State>) }
   } catch {
     // Unreadable storage: start empty.
@@ -22,12 +21,16 @@ function load(): State {
 }
 
 let state = load()
+onScopeChange(() => {
+  state = load()
+  notice = null
+})
 const listeners = new Set<() => void>()
 
 function commit(next: State) {
   state = next
   try {
-    localStorage.setItem(KEY, JSON.stringify(next))
+    writeItem("connectors", JSON.stringify(next))
   } catch {
     // Storage blocked: keep working in memory.
   }
@@ -106,16 +109,12 @@ export function saveToken(id: string, token: string, ttlMs?: number) {
     token,
     exp: ttlMs ? Date.now() + ttlMs : undefined,
   }
-  try {
-    localStorage.setItem(`ai-toll:token:${id}`, JSON.stringify(value))
-  } catch {
-    // Storage blocked.
-  }
+  writeItem(`token:${id}`, JSON.stringify(value))
 }
 
 export function getToken(id: string): { token: string | null; expired: boolean } {
   try {
-    const raw = localStorage.getItem(`ai-toll:token:${id}`)
+    const raw = readItem(`token:${id}`)
     if (!raw) return { token: null, expired: false }
     const value = JSON.parse(raw) as StoredToken
     return {
@@ -128,9 +127,5 @@ export function getToken(id: string): { token: string | null; expired: boolean }
 }
 
 export function clearToken(id: string) {
-  try {
-    localStorage.removeItem(`ai-toll:token:${id}`)
-  } catch {
-    // Storage blocked.
-  }
+  removeItem(`token:${id}`)
 }

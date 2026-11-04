@@ -7,25 +7,22 @@ import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js"
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js"
 
 import { asJson, type RuntimeTool } from "@/lib/connectors/types"
+import { onScopeChange, readItem, removeItem, writeItem } from "@/lib/scope"
 
 /** The connector waiting for its OAuth redirect to come back. */
-export const PENDING_KEY = "ai-toll:mcp:pending"
+export const PENDING_KEY = "mcp:pending"
 
-const read = <T>(key: string): T | undefined => {
+const read = <T>(name: string): T | undefined => {
   try {
-    const raw = localStorage.getItem(key)
+    const raw = readItem(name)
     return raw ? (JSON.parse(raw) as T) : undefined
   } catch {
     return undefined
   }
 }
 
-const write = (key: string, value: unknown) => {
-  try {
-    localStorage.setItem(key, JSON.stringify(value))
-  } catch {
-    // Storage blocked.
-  }
+const write = (name: string, value: unknown) => {
+  writeItem(name, JSON.stringify(value))
 }
 
 /** OAuth for a remote MCP server, kept in this browser. No keys to paste. */
@@ -37,7 +34,7 @@ class BrowserOAuthProvider implements OAuthClientProvider {
   }
 
   private key(name: string) {
-    return `ai-toll:mcp:${this.id}:${name}`
+    return `mcp:${this.id}:${name}`
   }
 
   get redirectUrl() {
@@ -71,27 +68,36 @@ class BrowserOAuthProvider implements OAuthClientProvider {
   }
 
   saveCodeVerifier(verifier: string) {
-    localStorage.setItem(this.key("verifier"), verifier)
+    writeItem(this.key("verifier"), verifier)
   }
 
   codeVerifier() {
-    return localStorage.getItem(this.key("verifier")) ?? ""
+    return readItem(this.key("verifier")) ?? ""
   }
 
   redirectToAuthorization(url: URL) {
-    localStorage.setItem(PENDING_KEY, this.id)
+    writeItem(PENDING_KEY, this.id)
     window.location.assign(url.toString())
   }
 
   clear() {
     for (const name of ["client", "tokens", "verifier"]) {
-      localStorage.removeItem(this.key(name))
+      removeItem(this.key(name))
     }
   }
 }
 
 const clients = new Map<string, Client>()
 const toolCache = new Map<string, RuntimeTool[]>()
+
+// Another user is signing in: drop every live connection of the previous one.
+onScopeChange(() => {
+  clients.forEach((client) => {
+    void client.close().catch(() => {})
+  })
+  clients.clear()
+  toolCache.clear()
+})
 
 function transportFor(url: string, provider: BrowserOAuthProvider, sse: boolean) {
   const target = new URL(url)

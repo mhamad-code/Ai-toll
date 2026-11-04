@@ -3,6 +3,7 @@ import * as React from "react"
 import type { ChatMessageData } from "@/components/ui/message-list"
 import type { MessageToolCallData } from "@/components/ui/message-parts"
 import { requestApproval } from "@/lib/approvals"
+import { loadConvs, saveConv } from "@/lib/chat-db"
 import {
   streamChat,
   type ApiMessage,
@@ -75,8 +76,10 @@ function parseArgs(text: string): Record<string, unknown> {
   }
 }
 
-export function useChats() {
+export function useChats(scope: string) {
   const [convs, setConvs] = React.useState<Conv[]>(() => [newConv()])
+  const [loaded, setLoaded] = React.useState(false)
+  const savedRef = React.useRef(new Map<string, Conv>())
   const [activeId, setActiveId] = React.useState(() => convs[0].id)
   const aborts = React.useRef(new Map<string, AbortController>())
   const convsRef = React.useRef(convs)
@@ -84,6 +87,60 @@ export function useChats() {
   React.useEffect(() => {
     convsRef.current = convs
   })
+
+  // Earlier chats come back from this device's database.
+  React.useEffect(() => {
+    let cancelled = false
+    loadConvs(scope)
+      .then((stored) => {
+        if (cancelled) return
+        const restored: Conv[] = stored
+          .sort((a, b) => b.updatedAt - a.updatedAt)
+          .map((c) => ({
+            id: c.id,
+            title: c.title,
+            messages: c.messages,
+            questions: c.questions ?? {},
+            raw: c.raw ?? {},
+            generating: false,
+          }))
+        restored.forEach((c) => savedRef.current.set(c.id, c))
+        setConvs((prev) => [
+          ...prev,
+          ...restored.filter((c) => !prev.some((p) => p.id === c.id)),
+        ])
+        setLoaded(true)
+      })
+      .catch(() => setLoaded(true))
+    return () => {
+      cancelled = true
+    }
+  }, [scope])
+
+  // Save whatever changed, once a reply has finished.
+  React.useEffect(() => {
+    if (!loaded) return
+    for (const c of convs) {
+      if (c.generating || c.messages.length === 0) continue
+      if (savedRef.current.get(c.id) === c) continue
+      savedRef.current.set(c.id, c)
+      saveConv(scope, {
+        id: c.id,
+        title: c.title,
+        messages: c.messages,
+        questions: c.questions,
+        raw: c.raw,
+        updatedAt: Date.now(),
+      }).catch(() => {})
+    }
+  }, [convs, loaded, scope])
+
+  // Leaving (sign-out or switching account) stops anything still running, so
+  // a reply can't keep using the previous user's connectors.
+  React.useEffect(() => {
+    const running = aborts.current
+    return () => running.forEach((controller) => controller.abort())
+  }, [])
 
   const patch = React.useCallback(
     (id: string, update: (conv: Conv) => Conv) => {
@@ -275,6 +332,7 @@ export function useChats() {
             let output = ""
             try {
               if (!tool) throw new Error(`Unknown tool: ${call.name}`)
+              if (controller.signal.aborted) throw new Error("Stopped")
               const args = parseArgs(call.arguments)
               const allowed =
                 !tool.write ||
@@ -283,6 +341,9 @@ export function useChats() {
                   description: tool.description,
                   args,
                 }))
+              if (allowed && controller.signal.aborted) {
+                throw new Error("Stopped")
+              }
               if (allowed) {
                 output = await tool.run(args)
                 entry.status = "done"

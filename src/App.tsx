@@ -29,10 +29,13 @@ import {
 } from "@/components/ui/chat-sidebar"
 import { ModelPicker, type ModelOption } from "@/components/ui/model-picker"
 import { ThemeToggle } from "@/components/ui/theme-toggle"
+import type { User } from "firebase/auth"
+
 import { isFirebaseConfigured, useAuth } from "@/lib/auth"
 import { handleOAuthReturn } from "@/lib/connectors/runtime"
 import { PROVIDERS } from "@/lib/providers"
 import { modelKey, settings, useSettings } from "@/lib/store"
+import { switchScope } from "@/lib/scope"
 import { useChats } from "@/lib/use-chats"
 
 type Page = "chat" | "providers" | "models" | "connectors" | "account"
@@ -51,11 +54,10 @@ function useIsMobile() {
   return mobile
 }
 
-export default function App() {
+function AppInner({ scope, user }: { scope: string; user: User | null }) {
   const mobile = useIsMobile()
   const { keys, saved, active } = useSettings()
-  const { convs, activeId, setActiveId, newChat, send, stop } = useChats()
-  const { user, loading } = useAuth()
+  const { convs, activeId, setActiveId, newChat, send, stop } = useChats(scope)
 
   const [page, setPage] = React.useState<Page>("chat")
   const [collapsed, setCollapsed] = React.useState(false)
@@ -233,15 +235,6 @@ export default function App() {
             ? "Account"
             : activeConv.title
 
-  if (isFirebaseConfigured && loading) {
-    return (
-      <div className="flex h-dvh items-center justify-center bg-background text-muted-foreground">
-        <LoaderCircle className="size-5 animate-spin" />
-      </div>
-    )
-  }
-  if (isFirebaseConfigured && !user) return <AuthPage />
-
   return (
     <div className="flex h-dvh w-full overflow-hidden bg-background text-foreground">
       <ApprovalDialog />
@@ -314,4 +307,29 @@ export default function App() {
       </div>
     </div>
   )
+}
+
+/**
+ * Decides whose data the app shows. Each account has its own storage; with
+ * nobody signed in nothing is readable, and `key` rebuilds the whole app when
+ * the account changes so no state from the previous one survives.
+ */
+export default function App() {
+  const { user, loading } = useAuth()
+
+  if (isFirebaseConfigured && loading) {
+    return (
+      <div className="flex h-dvh items-center justify-center bg-background text-muted-foreground">
+        <LoaderCircle className="size-5 animate-spin" />
+      </div>
+    )
+  }
+  if (isFirebaseConfigured && !user) {
+    switchScope(null)
+    return <AuthPage />
+  }
+
+  const scope = isFirebaseConfigured && user ? user.uid : "local"
+  switchScope(scope)
+  return <AppInner key={scope} scope={scope} user={user} />
 }

@@ -25,6 +25,7 @@ import {
   setNotice,
 } from "@/lib/connectors/store"
 import type { RuntimeTool } from "@/lib/connectors/types"
+import { readItem, removeItem } from "@/lib/scope"
 
 const GOOGLE_TOKEN_TTL = 55 * 60 * 1000
 
@@ -69,13 +70,13 @@ let handled = false
 export async function handleOAuthReturn(): Promise<boolean> {
   if (handled) return false
   const params = new URLSearchParams(window.location.search)
-  const pending = localStorage.getItem(PENDING_KEY)
+  const pending = readItem(PENDING_KEY)
   const code = params.get("code")
   const error = params.get("error")
   if (!pending || (!code && !error)) return false
   handled = true
 
-  localStorage.removeItem(PENDING_KEY)
+  removeItem(PENDING_KEY)
   window.history.replaceState({}, "", window.location.pathname)
 
   const connector = allConnectors(getConnectorState().custom).find(

@@ -1,5 +1,7 @@
 import * as React from "react"
 
+import { onScopeChange } from "@/lib/scope"
+
 export type ApprovalRequest = {
   title: string
   description: string
@@ -28,6 +30,13 @@ export function requestApproval(request: ApprovalRequest): Promise<boolean> {
     if (!current) next()
   })
 }
+
+// Another user is signing in: refuse whatever the previous one left waiting.
+onScopeChange(() => {
+  current?.resolve(false)
+  queue.splice(0).forEach((p) => p.resolve(false))
+  current = null
+})
 
 export function answerApproval(allowed: boolean) {
   const done = current
