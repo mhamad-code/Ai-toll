@@ -14,6 +14,7 @@ import { detectQuestions, type QuestionSpec } from "@/lib/clarify"
 import { loadTools } from "@/lib/connectors/runtime"
 import type { RuntimeTool } from "@/lib/connectors/types"
 import { buildSystemPrompt } from "@/lib/prompt"
+import { webTools } from "@/lib/web-tools"
 import { providerById } from "@/lib/providers"
 import type { SavedModel } from "@/lib/store"
 
@@ -32,6 +33,27 @@ export type Conv = {
 export type SendContext = {
   model: SavedModel | undefined
   apiKey: string | undefined
+  /** Search the web while answering (OpenRouter models). */
+  webSearch?: boolean
+}
+
+const cleanText = (text: string, max: number) =>
+  text.replace(/[|\][\r\n]+/g, " ").replace(/\s+/g, " ").trim().slice(0, max)
+
+/** Source chips for the end of an answer, in the citation syntax. */
+function sourceChips(sources: { url: string; title: string; content?: string }[]) {
+  return sources
+    .slice(0, 6)
+    .map((s) => {
+      const address = s.url
+        .replace(/^https?:\/\//i, "")
+        .replace(/^www\./i, "")
+        .replace(/\|/g, "%7C")
+        .replace(/\]/g, "%5D")
+        .replace(/\s/g, "%20")
+      return `[[cite: ${cleanText(s.title, 80) || address} | ${address} | ${cleanText(s.content ?? "", 160)}]]`
+    })
+    .join(" ")
 }
 
 /** Assistant messages that report a problem start with this and stay out of the history. */
@@ -208,24 +230,26 @@ export function useChats(scope: string) {
       const controller = new AbortController()
       aborts.current.set(id, controller)
 
-      // Tools from the connectors that are switched on.
-      let runtimeTools: RuntimeTool[] = []
+      // Tools: images and Wikipedia, plus the connectors that are switched on.
+      let connectorTools: RuntimeTool[] = []
       try {
-        runtimeTools = await loadTools()
+        connectorTools = await loadTools()
       } catch {
-        runtimeTools = []
+        connectorTools = []
       }
       const toolsSupported =
         ctx.model.tools !== false &&
         provider.kind !== "anthropic" &&
         provider.kind !== "google"
-      if (runtimeTools.length && !toolsSupported) {
+      if (connectorTools.length && !toolsSupported) {
         appendAssistant(
           id,
           `${ERROR_PREFIX}This model can't use connectors, so they are off for this reply. Pick a model with the Tools badge.`
         )
-        runtimeTools = []
       }
+      const runtimeTools: RuntimeTool[] = toolsSupported
+        ? [...webTools(), ...connectorTools]
+        : []
       const byName = new Map(runtimeTools.map((t) => [t.name, t]))
       const toolSpecs: ToolSpec[] = runtimeTools.map((t) => ({
         name: t.name,
@@ -236,6 +260,7 @@ export function useChats(scope: string) {
       const assistantId = crypto.randomUUID()
       const apiMessages = toApiMessages(history, conv.raw)
       const toolUi: MessageToolCallData[] = []
+      const sources: { url: string; title: string; content?: string }[] = []
       let content = ""
       let reasoning = ""
       let reasoningStart = 0
@@ -250,10 +275,11 @@ export function useChats(scope: string) {
         // The form is still arriving: keep the waiting indicator instead.
         if (detected.status === "open" && !final) return
         const ready = detected.status === "ready" ? detected : null
+        const body = ready ? ready.text || "A few quick questions:" : content
         const message: ChatMessageData = {
           id: assistantId,
           sender: "assistant",
-          content: ready ? ready.text || "A few quick questions:" : content,
+          content: sources.length ? `${body}\n\n${sourceChips(sources)}` : body,
           reasoning: reasoning || null,
           reasoningDuration: reasoningSeconds || undefined,
           tools: toolUi.length ? toolUi.map((t) => ({ ...t })) : undefined,
@@ -266,7 +292,7 @@ export function useChats(scope: string) {
           questions: ready
             ? { ...c.questions, [assistantId]: ready.questions }
             : c.questions,
-          raw: ready ? { ...c.raw, [assistantId]: content } : c.raw,
+          raw: ready || sources.length ? { ...c.raw, [assistantId]: content } : c.raw,
         }))
       }
       const schedule = () => {
@@ -286,6 +312,7 @@ export function useChats(scope: string) {
             messages: apiMessages,
             system: buildSystemPrompt(toolSpecs.length > 0),
             tools: toolSpecs,
+            webSearch: Boolean(ctx.webSearch) && provider.kind === "openrouter",
             reasoning: ctx.model.reasoning ?? false,
             signal: controller.signal,
           })) {
@@ -300,6 +327,10 @@ export function useChats(scope: string) {
               needSeparator = false
               content += event.delta
               stepText += event.delta
+            } else if (event.type === "sources") {
+              for (const s of event.sources) {
+                if (!sources.some((x) => x.url === s.url)) sources.push(s)
+              }
             } else {
               calls = event.calls
             }
@@ -379,7 +410,7 @@ export function useChats(scope: string) {
       if (reasoning && !content && !reasoningSeconds) {
         reasoningSeconds = (Date.now() - reasoningStart) / 1000
       }
-      if (content || reasoning || toolUi.length) render(true)
+      if (content || reasoning || toolUi.length || sources.length) render(true)
       if (failure) appendAssistant(id, `${ERROR_PREFIX}${failure}`)
       patch(id, (c) => ({ ...c, generating: false }))
     },

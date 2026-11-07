@@ -1,0 +1,42 @@
+/*
+ * Soft pastel accents on top of the stock shadcn theme. Only theme tokens are
+ * changed (backgrounds, borders, chart colours); every component keeps its own
+ * styles and picks these up automatically, in light and dark.
+ */
+:root {
+  --background: oklch(0.992 0.004 265);
+  --muted: oklch(0.965 0.016 265);
+  --secondary: oklch(0.955 0.026 285);
+  --accent: oklch(0.95 0.034 250);
+  --border: oklch(0.915 0.014 265);
+  --input: oklch(0.915 0.014 265);
+  --ring: oklch(0.72 0.08 265);
+  --chart-1: oklch(0.74 0.12 265);
+  --chart-2: oklch(0.8 0.11 165);
+  --chart-3: oklch(0.85 0.11 85);
+  --chart-4: oklch(0.78 0.12 25);
+  --chart-5: oklch(0.76 0.11 325);
+  --sidebar: oklch(0.975 0.014 265);
+  --sidebar-accent: oklch(0.943 0.03 265);
+  --sidebar-border: oklch(0.915 0.014 265);
+}
+
+.dark {
+  --background: oklch(0.155 0.012 265);
+  --card: oklch(0.2 0.016 265);
+  --popover: oklch(0.2 0.016 265);
+  --muted: oklch(0.26 0.022 265);
+  --secondary: oklch(0.285 0.034 285);
+  --accent: oklch(0.3 0.04 255);
+  --border: oklch(0.36 0.025 265 / 70%);
+  --input: oklch(0.36 0.025 265 / 80%);
+  --ring: oklch(0.58 0.08 265);
+  --chart-1: oklch(0.74 0.12 265);
+  --chart-2: oklch(0.8 0.11 165);
+  --chart-3: oklch(0.85 0.11 85);
+  --chart-4: oklch(0.78 0.12 25);
+  --chart-5: oklch(0.76 0.11 325);
+  --sidebar: oklch(0.185 0.016 265);
+  --sidebar-accent: oklch(0.285 0.036 265);
+  --sidebar-border: oklch(0.36 0.025 265 / 70%);
+}

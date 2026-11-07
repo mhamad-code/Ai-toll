@@ -25,6 +25,7 @@ export type StreamEvent =
   | { type: "text"; delta: string }
   | { type: "reasoning"; delta: string }
   | { type: "tool_calls"; calls: ToolCall[] }
+  | { type: "sources"; sources: { url: string; title: string; content?: string }[] }
 
 export type StreamRequest = {
   provider: Provider
@@ -35,6 +36,8 @@ export type StreamRequest = {
   system?: string
   /** Tools the model may call (OpenAI-compatible providers). */
   tools?: ToolSpec[]
+  /** Let the provider search the web (OpenRouter only). */
+  webSearch?: boolean
   /** Ask for visible thinking when the provider needs an opt-in. */
   reasoning: boolean
   signal: AbortSignal
@@ -175,6 +178,10 @@ type OpenAIChunk = {
       content?: string | null
       reasoning?: string | null
       reasoning_content?: string | null
+      annotations?: {
+        type?: string
+        url_citation?: { url?: string; title?: string; content?: string }
+      }[]
       tool_calls?: {
         index?: number
         id?: string
@@ -191,6 +198,7 @@ async function* openaiCompatible({
   messages,
   system,
   tools,
+  webSearch,
   signal,
 }: StreamRequest): AsyncGenerator<StreamEvent> {
   const body: Record<string, unknown> = {
@@ -199,6 +207,9 @@ async function* openaiCompatible({
     stream: true,
   }
   if (provider.kind === "openrouter") body.include_reasoning = true
+  if (provider.kind === "openrouter" && webSearch) {
+    body.plugins = [{ id: "web", max_results: 5 }]
+  }
   if (tools?.length) {
     body.tools = tools.map((t) => ({
       type: "function",
@@ -219,6 +230,7 @@ async function* openaiCompatible({
 
   const think = createThinkSplitter()
   const calls = new Map<number, { id: string; name: string; args: string }>()
+  const found = new Map<string, { url: string; title: string; content?: string }>()
 
   for await (const data of readSSE(res)) {
     if (data === "[DONE]") break
@@ -235,6 +247,12 @@ async function* openaiCompatible({
     if (typeof delta.content === "string" && delta.content) {
       yield* think.push(delta.content)
     }
+    for (const note of delta.annotations ?? []) {
+      const cite = note.url_citation
+      if (note.type === "url_citation" && cite?.url) {
+        found.set(cite.url, { url: cite.url, title: cite.title || cite.url, content: cite.content })
+      }
+    }
     for (const piece of delta.tool_calls ?? []) {
       const index =
         piece.index ?? (piece.id ? calls.size : Math.max(calls.size - 1, 0))
@@ -246,6 +264,7 @@ async function* openaiCompatible({
     }
   }
   yield* think.flush()
+  if (found.size) yield { type: "sources", sources: [...found.values()] }
 
   if (calls.size) {
     yield {

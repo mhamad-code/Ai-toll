@@ -13,7 +13,7 @@ import { AccountPage } from "@/components/account-page"
 import { ApprovalDialog } from "@/components/approval-dialog"
 import { AuthPage } from "@/components/auth-page"
 import { Chat } from "@/components/chat"
-import { citationHandlers } from "@/components/citation"
+import { richHandlers } from "@/components/citation"
 import { ConnectorsMenu } from "@/components/connectors-menu"
 import { ConnectorsPage } from "@/components/connectors-page"
 import { ModelsPage } from "@/components/models-page"
@@ -56,7 +56,7 @@ function useIsMobile() {
 
 function AppInner({ scope, user }: { scope: string; user: User | null }) {
   const mobile = useIsMobile()
-  const { keys, saved, active } = useSettings()
+  const { keys, saved, active, webSearch } = useSettings()
   const { convs, activeId, setActiveId, newChat, send, stop } = useChats(scope)
 
   const [page, setPage] = React.useState<Page>("chat")
@@ -276,12 +276,16 @@ function AppInner({ scope, user }: { scope: string; user: User | null }) {
             isGenerating={activeConv.generating}
             generationStartedAt={activeConv.startedAt}
             onSend={(text) =>
-              send(activeConv.id, text, { model: activeModel, apiKey })
+              send(activeConv.id, text, {
+                model: activeModel,
+                apiKey,
+                webSearch,
+              })
             }
             onStop={() => stop(activeConv.id)}
             tools={picker}
             pendingQuestions={pendingQuestions}
-            patternHandlers={citationHandlers}
+            patternHandlers={richHandlers}
           />
         </div>
         {page === "providers" ? (

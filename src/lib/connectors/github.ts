@@ -63,6 +63,8 @@ const repoSummary = (r: Repo) => ({
   updated: r.updated_at,
   default_branch: r.default_branch,
   url: r.html_url,
+  // GitHub's own social preview picture for the repo, safe to show as an image.
+  preview_image: `https://opengraph.githubassets.com/1/${r.full_name}`,
 })
 
 const repoArgs = {
@@ -114,6 +116,7 @@ export function githubTools(): RuntimeTool[] {
         followers: u.followers,
         following: u.following,
         url: u.html_url,
+        avatar: u.avatar_url,
       })
     }),
 
@@ -144,7 +147,7 @@ export function githubTools(): RuntimeTool[] {
       return asJson(list.map((f) => ({ name: f.name, type: f.type, path: f.path, size: f.size, url: f.html_url })))
     }),
 
-    tool("read_file", "Read a text file from a repository. Returns its content and sha.", schema({
+    tool("read_file", "Read a text file from a repository. Returns its content and sha. Images referenced by a README live at https://raw.githubusercontent.com/OWNER/REPO/BRANCH/PATH.", schema({
       ...repoArgs,
       path: { type: "string" },
       ref: { type: "string", description: "Branch, tag or commit." },

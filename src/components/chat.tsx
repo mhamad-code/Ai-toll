@@ -100,6 +100,9 @@ export function Chat({
           generationStartedAt={generationStartedAt}
           conversationKey={conversationKey}
           patternHandlers={patternHandlers}
+          onViewAction={(_messageId, action) => {
+            if (action.type === "send") send(action.text)
+          }}
         />
       )}
 

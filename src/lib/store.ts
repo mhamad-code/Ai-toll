@@ -20,12 +20,14 @@ type Settings = {
   saved: SavedModel[]
   /** `provider::model` key of the model chat should use. */
   active: string | null
+  /** Let OpenRouter models search the web. */
+  webSearch: boolean
 }
 
 export const modelKey = (provider: string, id: string) => `${provider}::${id}`
 
 function load(): Settings {
-  const empty: Settings = { keys: {}, saved: [], active: null }
+  const empty: Settings = { keys: {}, saved: [], active: null, webSearch: false }
   try {
     const raw = readItem("settings")
     if (raw) return { ...empty, ...(JSON.parse(raw) as Partial<Settings>) }
@@ -77,7 +79,7 @@ export const settings = {
       : saved[0]
         ? modelKey(saved[0].provider, saved[0].id)
         : null
-    commit({ keys, saved, active })
+    commit({ ...state, keys, saved, active })
   },
 
   toggleSaved(model: SavedModel) {
@@ -103,6 +105,10 @@ export const settings = {
         active: state.active ?? key,
       })
     }
+  },
+
+  setWebSearch(value: boolean) {
+    commit({ ...state, webSearch: value })
   },
 
   setActive(key: string) {

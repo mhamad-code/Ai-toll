@@ -77,3 +77,61 @@ export const citationHandlers: PatternHandler[] = [
     ),
   },
 ]
+
+function ImageCard({
+  title,
+  description,
+  image,
+  href,
+}: {
+  title: string
+  description: string
+  image: string
+  href?: string
+}) {
+  const body = (
+    <>
+      <span className="flex min-w-0 flex-1 flex-col gap-1">
+        <span className="font-medium text-foreground">{title}</span>
+        {description ? (
+          <span className="text-sm text-muted-foreground">{description}</span>
+        ) : null}
+      </span>
+      <img
+        src={image}
+        alt=""
+        loading="lazy"
+        className="h-16 w-24 shrink-0 rounded-lg object-cover"
+        onError={(event) => {
+          event.currentTarget.style.display = "none"
+        }}
+      />
+    </>
+  )
+  const className =
+    "my-2 flex items-center gap-3 rounded-xl border bg-card p-3 no-underline shadow-xs transition-shadow hover:shadow-md dark:hover:shadow-white/10"
+
+  return href ? (
+    <a href={href} target="_blank" rel="noreferrer" className={className}>
+      {body}
+    </a>
+  ) : (
+    <span className={className}>{body}</span>
+  )
+}
+
+/** `[[card: Title | description | image-host/path | link-host/path]]`: a row with a picture. */
+const cardHandler: PatternHandler = {
+  pattern:
+    /\[\[card:\s*([^|\]]+?)\s*\|\s*([^|\]]*?)\s*\|\s*([^\s|\]]+)(?:\s*\|\s*([^\s|\]]+))?\s*\]\]/g,
+  render: (match) => (
+    <ImageCard
+      title={match[1]}
+      description={match[2]}
+      image={withScheme(match[3])}
+      href={match[4] ? withScheme(match[4]) : undefined}
+    />
+  ),
+}
+
+export const richHandlers: PatternHandler[] = [...citationHandlers, cardHandler]

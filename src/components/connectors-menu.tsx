@@ -1,6 +1,6 @@
 "use client"
 
-import { Plug, Plus, SlidersHorizontal } from "lucide-react"
+import { Globe, Plug, Plus, SlidersHorizontal } from "lucide-react"
 
 import { ConnectorLogo } from "@/components/connector-logo"
 import { Button } from "@/components/ui/button"
@@ -18,12 +18,14 @@ import {
 } from "@/lib/connectors/catalog"
 import { connectConnector } from "@/lib/connectors/runtime"
 import { connectorActions, useConnectorState } from "@/lib/connectors/store"
+import { settings, useSettings } from "@/lib/store"
 
 const SUGGESTED = ["github", "gmail", "gcalendar", "gdrive", "linear", "notion"]
 
 /** The plug button in the composer: switch connectors on or off, or add more. */
 export function ConnectorsMenu({ onOpenPage }: { onOpenPage: () => void }) {
   const state = useConnectorState()
+  const { webSearch } = useSettings()
   const all = allConnectors(state.custom)
   const connected = all.filter((c) => state.connected[c.id])
   const suggestions = SUGGESTED.map((id) => all.find((c) => c.id === id))
@@ -46,6 +48,20 @@ export function ConnectorsMenu({ onOpenPage }: { onOpenPage: () => void }) {
         }
       />
       <DropdownMenuContent side="top" align="start" className="w-72">
+        <DropdownMenuItem
+          closeOnClick={false}
+          onClick={() => settings.setWebSearch(!webSearch)}
+        >
+          <Globe />
+          <span className="flex-1 truncate">Web search (OpenRouter)</span>
+          <Switch
+            checked={webSearch}
+            tabIndex={-1}
+            aria-hidden
+            className="pointer-events-none"
+          />
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
         <DropdownMenuItem onClick={onOpenPage}>
           <SlidersHorizontal />
           Manage connectors
