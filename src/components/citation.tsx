@@ -1,5 +1,7 @@
 "use client"
 
+import * as React from "react"
+
 import { Button } from "@/components/ui/button"
 import {
   HoverCard,
@@ -7,6 +9,8 @@ import {
   HoverCardTrigger,
 } from "@/components/ui/hover-card"
 import type { PatternHandler } from "@/components/ui/message"
+import { decodeSource } from "@/lib/source-token"
+import { topicImage, type TopicImage } from "@/lib/wiki-images"
 
 export type Source = {
   url: string
@@ -134,4 +138,77 @@ const cardHandler: PatternHandler = {
   ),
 }
 
-export const richHandlers: PatternHandler[] = [...citationHandlers, cardHandler]
+/** `[[src:<hex>]]`: a source chip the app wrote itself (web search results). */
+const sourceHandler: PatternHandler = {
+  pattern: /\[\[src:([0-9a-f]+)\]\]/g,
+  render: (match) => {
+    const source = decodeSource(match[1])
+    return source ? <Citation source={source} /> : null
+  },
+}
+
+function ImageGallery({ topics }: { topics: string[] }) {
+  const [items, setItems] = React.useState<TopicImage[] | null>(null)
+  const key = topics.join("|")
+
+  React.useEffect(() => {
+    let cancelled = false
+    Promise.all(topics.map(topicImage)).then((found) => {
+      if (!cancelled) setItems(found.filter((x): x is TopicImage => x !== null))
+    })
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key])
+
+  if (items === null) {
+    return <span className="my-2 block text-xs text-muted-foreground">Loading images…</span>
+  }
+  if (!items.length) return null
+
+  return (
+    <span className="my-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+      {items.map((item) => (
+        <a
+          key={item.url}
+          href={item.url}
+          target="_blank"
+          rel="noreferrer"
+          className="block overflow-hidden rounded-xl border bg-card no-underline shadow-xs transition-shadow hover:shadow-md dark:hover:shadow-white/10"
+        >
+          <img
+            src={item.image}
+            alt={item.title}
+            loading="lazy"
+            className="aspect-video w-full object-cover"
+          />
+          <span className="block px-2 py-1.5 text-xs font-medium text-foreground">
+            {item.title}
+            <span className="block font-normal text-muted-foreground">Wikipedia</span>
+          </span>
+        </a>
+      ))}
+    </span>
+  )
+}
+
+/** `[[images: Topic | Another topic]]`: pictures found on Wikipedia by the app, not the model. */
+const imagesHandler: PatternHandler = {
+  pattern: /\[\[images:\s*([^\]]+?)\s*\]\]/g,
+  render: (match) => {
+    const topics = match[1]
+      .split(/[|,،]/)
+      .map((t) => t.trim())
+      .filter(Boolean)
+      .slice(0, 4)
+    return topics.length ? <ImageGallery topics={topics} /> : null
+  },
+}
+
+export const richHandlers: PatternHandler[] = [
+  ...citationHandlers,
+  sourceHandler,
+  imagesHandler,
+  cardHandler,
+]

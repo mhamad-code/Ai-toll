@@ -14,7 +14,7 @@ import { detectQuestions, type QuestionSpec } from "@/lib/clarify"
 import { loadTools } from "@/lib/connectors/runtime"
 import type { RuntimeTool } from "@/lib/connectors/types"
 import { buildSystemPrompt } from "@/lib/prompt"
-import { webTools } from "@/lib/web-tools"
+import { encodeSource } from "@/lib/source-token"
 import { providerById } from "@/lib/providers"
 import type { SavedModel } from "@/lib/store"
 
@@ -38,21 +38,20 @@ export type SendContext = {
 }
 
 const cleanText = (text: string, max: number) =>
-  text.replace(/[|\][\r\n]+/g, " ").replace(/\s+/g, " ").trim().slice(0, max)
+  text.replace(/\s+/g, " ").trim().slice(0, max)
 
-/** Source chips for the end of an answer, in the citation syntax. */
+/** Source chips for the end of an answer. */
 function sourceChips(sources: { url: string; title: string; content?: string }[]) {
   return sources
     .slice(0, 6)
-    .map((s) => {
-      const address = s.url
-        .replace(/^https?:\/\//i, "")
-        .replace(/^www\./i, "")
-        .replace(/\|/g, "%7C")
-        .replace(/\]/g, "%5D")
-        .replace(/\s/g, "%20")
-      return `[[cite: ${cleanText(s.title, 80) || address} | ${address} | ${cleanText(s.content ?? "", 160)}]]`
-    })
+    .map(
+      (s) =>
+        `[[src:${encodeSource({
+          title: cleanText(s.title, 70) || s.url,
+          url: s.url,
+          description: cleanText(s.content ?? "", 110) || undefined,
+        })}]]`
+    )
     .join(" ")
 }
 
@@ -247,9 +246,7 @@ export function useChats(scope: string) {
           `${ERROR_PREFIX}This model can't use connectors, so they are off for this reply. Pick a model with the Tools badge.`
         )
       }
-      const runtimeTools: RuntimeTool[] = toolsSupported
-        ? [...webTools(), ...connectorTools]
-        : []
+      const runtimeTools: RuntimeTool[] = toolsSupported ? connectorTools : []
       const byName = new Map(runtimeTools.map((t) => [t.name, t]))
       const toolSpecs: ToolSpec[] = runtimeTools.map((t) => ({
         name: t.name,
@@ -275,7 +272,14 @@ export function useChats(scope: string) {
         // The form is still arriving: keep the waiting indicator instead.
         if (detected.status === "open" && !final) return
         const ready = detected.status === "ready" ? detected : null
-        const body = ready ? ready.text || "A few quick questions:" : content
+        // A questions block that is broken or never closed is dropped, not shown as code.
+        const dropped =
+          detected.status === "broken" || detected.status === "open" ? detected : null
+        const body = ready
+          ? ready.text || "A few quick questions:"
+          : dropped
+            ? dropped.text || "I need a bit more detail. What exactly would you like to know?"
+            : content
         const message: ChatMessageData = {
           id: assistantId,
           sender: "assistant",
@@ -292,7 +296,10 @@ export function useChats(scope: string) {
           questions: ready
             ? { ...c.questions, [assistantId]: ready.questions }
             : c.questions,
-          raw: ready || sources.length ? { ...c.raw, [assistantId]: content } : c.raw,
+          raw:
+            ready || dropped || sources.length
+              ? { ...c.raw, [assistantId]: dropped ? body : content }
+              : c.raw,
         }))
       }
       const schedule = () => {

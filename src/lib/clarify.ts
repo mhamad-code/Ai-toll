@@ -18,7 +18,10 @@ export type QuestionSpec = {
 
 export type Detected =
   | { status: "none" }
-  | { status: "open" }
+  /** The block hasn't closed yet (still streaming, or cut off). */
+  | { status: "open"; text: string }
+  /** The block closed but isn't usable JSON. */
+  | { status: "broken"; text: string }
   | { status: "ready"; questions: QuestionSpec[]; text: string }
 
 const FENCE_START = "```questions"
@@ -33,18 +36,20 @@ export const SYSTEM_PROMPT = [
   '{"questions":[{"name":"goal","title":"What is this for?","description":"Pick one.","multiple":false,"required":true,"allowOther":true,"choices":[{"label":"Work","value":"work"},{"label":"Study","value":"study"}]}]}',
   "```",
   "",
-  'Rules: ask 1 to 4 questions, each with 2 to 5 choices. "name" and every "value" are short ASCII ids. Set "multiple" to true only when several answers can apply. Keep titles short. Never ask when the request is already clear: just answer it. After the user answers, continue and give the final answer without asking again unless something essential is still missing.',
+  'Rules: ask 1 to 4 questions, each with 2 to 5 choices. "name" and every "value" are short ASCII ids. Set "multiple" to true only when several answers can apply. Keep titles short. Ask only when you truly cannot give a useful answer without the missing detail; otherwise state your assumption and answer. Never ask when the request is already clear. After the user answers, continue and give the final answer without asking again unless something essential is still missing.',
 ].join("\n")
 
 export function detectQuestions(content: string): Detected {
   if (!content.includes(FENCE_START)) return { status: "none" }
   const match = FENCE.exec(content)
-  if (!match) return { status: "open" }
-  const questions = normalize(match[1])
-  if (!questions) return { status: "none" }
+  if (!match) {
+    return { status: "open", text: content.slice(0, content.indexOf(FENCE_START)).trim() }
+  }
   const text = (
     content.slice(0, match.index) + content.slice(match.index + match[0].length)
   ).trim()
+  const questions = normalize(match[1])
+  if (!questions) return { status: "broken", text }
   return { status: "ready", questions, text }
 }
 
@@ -71,13 +76,51 @@ function uniqueId(base: string, seen: Set<string>) {
   return id
 }
 
-function normalize(raw: string): QuestionSpec[] | null {
-  let data: unknown
+/** Small models often leave an extra or missing bracket; this takes the first complete value. */
+function parseLenient(raw: string): unknown {
   try {
-    data = JSON.parse(raw)
+    return JSON.parse(raw)
+  } catch {
+    // Try to repair it below.
+  }
+  const start = raw.search(/[[{]/)
+  if (start < 0) return null
+  const closers: string[] = []
+  let inString = false
+  let escaped = false
+  for (let i = start; i < raw.length; i++) {
+    const ch = raw[i]
+    if (inString) {
+      if (escaped) escaped = false
+      else if (ch === "\\") escaped = true
+      else if (ch === '"') inString = false
+      continue
+    }
+    if (ch === '"') inString = true
+    else if (ch === "{") closers.push("}")
+    else if (ch === "[") closers.push("]")
+    else if (ch === "}" || ch === "]") {
+      closers.pop()
+      if (closers.length === 0) {
+        try {
+          return JSON.parse(raw.slice(start, i + 1))
+        } catch {
+          return null
+        }
+      }
+    }
+  }
+  if (inString) return null
+  try {
+    return JSON.parse(raw.slice(start) + closers.reverse().join(""))
   } catch {
     return null
   }
+}
+
+function normalize(raw: string): QuestionSpec[] | null {
+  const data = parseLenient(raw)
+  if (data === null) return null
   const list = Array.isArray(data)
     ? data
     : (data as { questions?: unknown } | null)?.questions
