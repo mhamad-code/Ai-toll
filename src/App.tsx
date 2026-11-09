@@ -28,7 +28,7 @@ import {
   SidebarCollapsibleSection,
 } from "@/components/ui/chat-sidebar"
 import { ModelPicker, type ModelOption } from "@/components/ui/model-picker"
-import { ThemeToggle } from "@/components/ui/theme-toggle"
+import { ThemePicker } from "@/components/theme-picker"
 import type { User } from "firebase/auth"
 
 import { isFirebaseConfigured, useAuth } from "@/lib/auth"
@@ -264,7 +264,7 @@ function AppInner({ scope, user }: { scope: string; user: User | null }) {
               </SideIconBtn>
             ) : undefined
           }
-          right={<ThemeToggle floating={false} />}
+          right={<ThemePicker />}
         />
 
         {/* Chat stays mounted so switching pages doesn't lose the draft. */}

@@ -20,7 +20,7 @@ import {
   FieldSeparator,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import { ThemeToggle } from "@/components/ui/theme-toggle"
+import { ThemePicker } from "@/components/theme-picker"
 import {
   describeAuthError,
   resetPassword,
@@ -128,7 +128,7 @@ export function AuthPage() {
   return (
     <div className="relative flex min-h-svh flex-col items-center justify-center gap-6 bg-muted p-6 md:p-10">
       <div className="absolute top-4 right-4">
-        <ThemeToggle floating={false} />
+        <ThemePicker />
       </div>
       <div className="flex w-full max-w-sm flex-col gap-6">
         <div className="flex items-center gap-2 self-center font-medium">

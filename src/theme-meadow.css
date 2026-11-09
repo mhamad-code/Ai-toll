@@ -1,0 +1,68 @@
+/*
+ * "Meadow" theme: the green-hills photo is the background of the whole site and
+ * every colour below is taken from it (navy sky, cloud white, grass green).
+ * It sits on top of the dark theme, so components keep their dark styles, and
+ * panels are translucent so the picture stays visible behind them.
+ */
+html.meadow {
+  background: oklch(0.15 0.03 135);
+}
+
+.meadow body {
+  background: transparent;
+}
+
+.meadow body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background:
+    linear-gradient(oklch(0.12 0.04 255 / 0.3), oklch(0.12 0.04 255 / 0.5)),
+    url("./assets/meadow.jpg") center 68% / cover no-repeat;
+}
+
+.dark.meadow {
+  --background: oklch(0.17 0.04 255 / 0.5);
+  --foreground: oklch(0.97 0.012 125);
+  --card: oklch(0.2 0.045 259 / 0.58);
+  --card-foreground: oklch(0.97 0.012 125);
+  --popover: oklch(0.2 0.045 259 / 0.92);
+  --popover-foreground: oklch(0.97 0.012 125);
+  --primary: oklch(0.72 0.19 132);
+  --primary-foreground: oklch(0.18 0.05 135);
+  --secondary: oklch(0.42 0.084 248 / 0.55);
+  --secondary-foreground: oklch(0.97 0.012 125);
+  --muted: oklch(0.23 0.053 259 / 0.55);
+  --muted-foreground: oklch(0.9 0.03 228);
+  --accent: oklch(0.45 0.12 137 / 0.55);
+  --accent-foreground: oklch(0.97 0.012 125);
+  --border: oklch(0.85 0.047 228 / 22%);
+  --input: oklch(0.85 0.047 228 / 26%);
+  --ring: oklch(0.72 0.19 132);
+  --chart-1: oklch(0.72 0.19 132);
+  --chart-2: oklch(0.7 0.1 239);
+  --chart-3: oklch(0.86 0.17 118);
+  --chart-4: oklch(0.75 0.11 190);
+  --chart-5: oklch(0.85 0.05 228);
+  --sidebar: oklch(0.17 0.045 259 / 0.55);
+  --sidebar-foreground: oklch(0.97 0.012 125);
+  --sidebar-primary: oklch(0.72 0.19 132);
+  --sidebar-primary-foreground: oklch(0.18 0.05 135);
+  --sidebar-accent: oklch(0.45 0.12 137 / 0.5);
+  --sidebar-accent-foreground: oklch(0.97 0.012 125);
+  --sidebar-border: oklch(0.85 0.047 228 / 22%);
+  --sidebar-ring: oklch(0.72 0.19 132);
+}
+
+/* Frosted glass over the picture. */
+.meadow [data-slot="card"],
+.meadow [data-slot="dialog-content"],
+.meadow [data-slot="dropdown-menu-content"],
+.meadow [data-slot="select-content"],
+.meadow [data-slot="popover-content"],
+.meadow [data-slot="hover-card-content"],
+.meadow aside {
+  backdrop-filter: blur(14px) saturate(1.15);
+  -webkit-backdrop-filter: blur(14px) saturate(1.15);
+}
