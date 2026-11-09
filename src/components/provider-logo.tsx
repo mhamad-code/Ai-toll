@@ -1,13 +1,15 @@
 import * as React from "react"
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Skeleton } from "@/components/ui/skeleton"
 import { iconUrl, modelSlug, providerSlug } from "@/lib/logos"
 import type { Provider } from "@/lib/providers"
 import { cn } from "@/lib/utils"
 
 /**
- * Coloured logo when one exists, mono (inverted in dark mode) when it
- * doesn't, initials when neither loads.
+ * Shimmering placeholder while the logo loads, then the coloured logo; mono
+ * (inverted in dark mode) when there is no coloured one, initials when
+ * neither loads.
  */
 export function BrandLogo({
   slug,
@@ -18,23 +20,35 @@ export function BrandLogo({
   name: string
   className?: string
 }) {
-  const [failedColor, setFailedColor] = React.useState<string | null>(null)
-  const mono = slug !== null && failedColor === slug
+  const [failure, setFailure] = React.useState<{
+    slug: string
+    phase: "mono" | "none"
+  } | null>(null)
+  const phase = failure && failure.slug === slug ? failure.phase : "color"
+  const url = slug && phase !== "none" ? iconUrl(slug, phase === "color") : null
 
   return (
     <Avatar className={className}>
-      {slug ? (
+      {url ? (
         <AvatarImage
-          key={`${slug}-${mono ? "mono" : "color"}`}
-          src={iconUrl(slug, !mono)}
+          key={url}
+          src={url}
           alt=""
-          className={cn("p-1", mono && "dark:invert")}
+          className={cn("p-1", phase === "mono" && "dark:invert")}
           onLoadingStatusChange={(status) => {
-            if (status === "error" && !mono) setFailedColor(slug)
+            if (status === "error" && slug) {
+              setFailure({ slug, phase: phase === "color" ? "mono" : "none" })
+            }
           }}
         />
       ) : null}
-      <AvatarFallback>{name.slice(0, 2).toUpperCase()}</AvatarFallback>
+      <AvatarFallback>
+        {url ? (
+          <Skeleton className="size-full rounded-full" />
+        ) : (
+          name.slice(0, 2).toUpperCase()
+        )}
+      </AvatarFallback>
     </Avatar>
   )
 }

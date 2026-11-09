@@ -3,11 +3,11 @@ import {
   Brain,
   Eye,
   ImageIcon,
-  LoaderCircle,
   Search,
   Wrench,
 } from "lucide-react"
 
+import { ListSkeleton } from "@/components/list-skeleton"
 import { ModelLogo, ProviderLogo } from "@/components/provider-logo"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
@@ -291,12 +291,7 @@ export function ModelsPage({ onOpenProviders }: { onOpenProviders: () => void })
             </TabsList>
           </Tabs>
 
-          {load.status === "loading" ? (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <LoaderCircle className="size-4 animate-spin" />
-              Loading models
-            </div>
-          ) : null}
+          {load.status === "loading" ? <ListSkeleton /> : null}
 
           {load.status === "error" ? (
             <Alert variant="destructive">

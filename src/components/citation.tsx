@@ -163,7 +163,21 @@ function ImageGallery({ topics }: { topics: string[] }) {
   }, [key])
 
   if (items === null) {
-    return <span className="my-2 block text-xs text-muted-foreground">Loading images…</span>
+    return (
+      <span
+        className="my-2 grid grid-cols-2 gap-2 sm:grid-cols-3"
+        aria-busy="true"
+        aria-label="Loading images"
+      >
+        {topics.slice(0, 3).map((topic) => (
+          <span
+            key={topic}
+            data-slot="skeleton"
+            className="block aspect-video rounded-xl"
+          />
+        ))}
+      </span>
+    )
   }
   if (!items.length) return null
 

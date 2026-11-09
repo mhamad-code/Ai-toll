@@ -117,6 +117,14 @@ async function toolsFor(c: Connector): Promise<RuntimeTool[]> {
   return []
 }
 
+/** True when at least one connector is connected and switched on. */
+export function hasActiveConnectors(): boolean {
+  const state = getConnectorState()
+  return Object.keys(state.enabled).some(
+    (id) => state.enabled[id] && state.connected[id]
+  )
+}
+
 /** Tools of every connector that is connected and switched on. */
 export async function loadTools(): Promise<RuntimeTool[]> {
   const state = getConnectorState()

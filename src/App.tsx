@@ -2,7 +2,6 @@ import * as React from "react"
 import {
   Boxes,
   KeyRound,
-  LoaderCircle,
   Menu,
   MessageSquarePlus,
   Plug,
@@ -28,6 +27,7 @@ import {
   SidebarCollapsibleSection,
 } from "@/components/ui/chat-sidebar"
 import { ModelPicker, type ModelOption } from "@/components/ui/model-picker"
+import { Skeleton } from "@/components/ui/skeleton"
 import { ThemePicker } from "@/components/theme-picker"
 import type { User } from "firebase/auth"
 
@@ -54,10 +54,37 @@ function useIsMobile() {
   return mobile
 }
 
+/** Shown while the sign-in state is being restored. */
+function AppSkeleton() {
+  return (
+    <div className="flex h-dvh w-full bg-background" aria-busy="true">
+      <div className="hidden w-72 shrink-0 flex-col gap-3 border-r p-4 md:flex">
+        <Skeleton className="h-8 w-32" />
+        {[0, 1, 2, 3].map((i) => (
+          <Skeleton key={i} className="h-7" />
+        ))}
+      </div>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <div className="border-b p-3">
+          <Skeleton className="h-6 w-40" />
+        </div>
+        <div className="flex flex-1 flex-col gap-4 p-4">
+          <Skeleton className="ml-auto h-10 w-2/3 rounded-2xl" />
+          <Skeleton className="h-28 w-full rounded-2xl" />
+        </div>
+        <div className="p-4">
+          <Skeleton className="h-24 w-full rounded-3xl" />
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function AppInner({ scope, user }: { scope: string; user: User | null }) {
   const mobile = useIsMobile()
   const { keys, saved, active, webSearch } = useSettings()
-  const { convs, activeId, setActiveId, newChat, send, stop } = useChats(scope)
+  const { convs, activeId, setActiveId, newChat, send, stop, loaded } =
+    useChats(scope)
 
   const [page, setPage] = React.useState<Page>("chat")
   const [collapsed, setCollapsed] = React.useState(false)
@@ -220,6 +247,11 @@ function AppInner({ scope, user }: { scope: string; user: User | null }) {
             {c.title}
           </SideRow>
         ))}
+        {!loaded
+          ? [0, 1, 2].map((i) => (
+              <Skeleton key={i} className="mx-2 my-1 h-7" />
+            ))
+          : null}
       </SidebarCollapsibleSection>
     </ChatSidebar>
   )
@@ -321,13 +353,7 @@ function AppInner({ scope, user }: { scope: string; user: User | null }) {
 export default function App() {
   const { user, loading } = useAuth()
 
-  if (isFirebaseConfigured && loading) {
-    return (
-      <div className="flex h-dvh items-center justify-center bg-background text-muted-foreground">
-        <LoaderCircle className="size-5 animate-spin" />
-      </div>
-    )
-  }
+  if (isFirebaseConfigured && loading) return <AppSkeleton />
   if (isFirebaseConfigured && !user) {
     switchScope(null)
     return <AuthPage />

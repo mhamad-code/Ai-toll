@@ -11,7 +11,7 @@ import {
   type ToolSpec,
 } from "@/lib/chat-stream"
 import { detectQuestions, type QuestionSpec } from "@/lib/clarify"
-import { loadTools } from "@/lib/connectors/runtime"
+import { hasActiveConnectors, loadTools } from "@/lib/connectors/runtime"
 import type { RuntimeTool } from "@/lib/connectors/types"
 import { buildSystemPrompt } from "@/lib/prompt"
 import { encodeSource } from "@/lib/source-token"
@@ -229,31 +229,6 @@ export function useChats(scope: string) {
       const controller = new AbortController()
       aborts.current.set(id, controller)
 
-      // Tools: images and Wikipedia, plus the connectors that are switched on.
-      let connectorTools: RuntimeTool[] = []
-      try {
-        connectorTools = await loadTools()
-      } catch {
-        connectorTools = []
-      }
-      const toolsSupported =
-        ctx.model.tools !== false &&
-        provider.kind !== "anthropic" &&
-        provider.kind !== "google"
-      if (connectorTools.length && !toolsSupported) {
-        appendAssistant(
-          id,
-          `${ERROR_PREFIX}This model can't use connectors, so they are off for this reply. Pick a model with the Tools badge.`
-        )
-      }
-      const runtimeTools: RuntimeTool[] = toolsSupported ? connectorTools : []
-      const byName = new Map(runtimeTools.map((t) => [t.name, t]))
-      const toolSpecs: ToolSpec[] = runtimeTools.map((t) => ({
-        name: t.name,
-        description: t.description,
-        parameters: t.parameters,
-      }))
-
       const assistantId = crypto.randomUUID()
       const apiMessages = toApiMessages(history, conv.raw)
       const toolUi: MessageToolCallData[] = []
@@ -280,11 +255,15 @@ export function useChats(scope: string) {
           : dropped
             ? dropped.text || "I need a bit more detail. What exactly would you like to know?"
             : content
+        // Until the first word arrives, a blank "Thinking…" row stands in, so the
+        // reply shows up the moment you send instead of when the model answers.
+        const waiting =
+          !final && !content && !reasoning && toolUi.length === 0 && sources.length === 0
         const message: ChatMessageData = {
           id: assistantId,
           sender: "assistant",
           content: sources.length ? `${body}\n\n${sourceChips(sources)}` : body,
-          reasoning: reasoning || null,
+          reasoning: reasoning || (waiting ? " " : null),
           reasoningDuration: reasoningSeconds || undefined,
           tools: toolUi.length ? toolUi.map((t) => ({ ...t })) : undefined,
         }
@@ -305,6 +284,43 @@ export function useChats(scope: string) {
       const schedule = () => {
         if (timer === null) timer = setTimeout(() => render(), 50)
       }
+
+      // Show the reply right away; everything below (tools, network) happens behind it.
+      render()
+
+      // Only wait for connectors when one is switched on; their tool lists are cached after the first message.
+      let connectorTools: RuntimeTool[] = []
+      if (hasActiveConnectors()) {
+        try {
+          connectorTools = await loadTools()
+        } catch {
+          connectorTools = []
+        }
+      }
+      const toolsSupported =
+        ctx.model.tools !== false &&
+        provider.kind !== "anthropic" &&
+        provider.kind !== "google"
+      if (connectorTools.length && !toolsSupported) {
+        patch(id, (c) => {
+          const note: ChatMessageData = {
+            id: crypto.randomUUID(),
+            sender: "assistant",
+            content: `${ERROR_PREFIX}This model can't use connectors, so they are off for this reply. Pick a model with the Tools badge.`,
+          }
+          const messages = [...c.messages]
+          const at = messages.findIndex((m) => m.id === assistantId)
+          messages.splice(at < 0 ? messages.length : at, 0, note)
+          return { ...c, messages }
+        })
+      }
+      const runtimeTools: RuntimeTool[] = toolsSupported ? connectorTools : []
+      const byName = new Map(runtimeTools.map((t) => [t.name, t]))
+      const toolSpecs: ToolSpec[] = runtimeTools.map((t) => ({
+        name: t.name,
+        description: t.description,
+        parameters: t.parameters,
+      }))
 
       try {
         for (let step = 0; step < MAX_STEPS; step++) {
@@ -417,12 +433,20 @@ export function useChats(scope: string) {
       if (reasoning && !content && !reasoningSeconds) {
         reasoningSeconds = (Date.now() - reasoningStart) / 1000
       }
-      if (content || reasoning || toolUi.length || sources.length) render(true)
+      if (content || reasoning || toolUi.length || sources.length) {
+        render(true)
+      } else {
+        // Nothing came back: take the blank placeholder away again.
+        patch(id, (c) => ({
+          ...c,
+          messages: c.messages.filter((m) => m.id !== assistantId),
+        }))
+      }
       if (failure) appendAssistant(id, `${ERROR_PREFIX}${failure}`)
       patch(id, (c) => ({ ...c, generating: false }))
     },
     [appendAssistant, patch]
   )
 
-  return { convs, activeId, setActiveId, newChat, send, stop }
+  return { convs, activeId, setActiveId, newChat, send, stop, loaded }
 }
