@@ -1,13 +1,13 @@
 import * as React from "react"
 
-export type Page = "chat" | "providers" | "models" | "connectors" | "account"
+export type Page = "chat" | "code" | "providers" | "models" | "connectors" | "account"
 export type Route = { page: Page; id?: string }
 
 /** "/Ai-toll/" on GitHub Pages; always ends with a slash. */
 const BASE = import.meta.env.BASE_URL
 const EVENT = "ai-toll:navigate"
 
-const PAGES = new Set<string>(["providers", "models", "connectors", "account"])
+const PAGES = new Set<string>(["code", "providers", "models", "connectors", "account"])
 
 /** `/chat/<id>` is a conversation, `/` a fresh chat, the rest are pages. */
 export function parseRoute(pathname: string): Route {

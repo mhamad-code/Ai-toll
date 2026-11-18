@@ -1,6 +1,7 @@
 import * as React from "react"
 import {
   Boxes,
+  Code2,
   KeyRound,
   Menu,
   MessageSquarePlus,
@@ -13,6 +14,7 @@ import { AccountPage } from "@/components/account-page"
 import { ApprovalDialog } from "@/components/approval-dialog"
 import { AuthPage } from "@/components/auth-page"
 import { Chat } from "@/components/chat"
+import CodePage from "@/components/code-page"
 import { richHandlers } from "@/components/citation"
 import { ConnectorsMenu } from "@/components/connectors-menu"
 import { ConnectorsPage } from "@/components/connectors-page"
@@ -222,6 +224,13 @@ function AppInner({ scope, user }: { scope: string; user: User | null }) {
             New chat
           </SideRow>
           <SideRow
+            icon={<Code2 className="size-4" />}
+            className={pageClass("code")}
+            onClick={() => go("code")}
+          >
+            Code
+          </SideRow>
+          <SideRow
             icon={<KeyRound className="size-4" />}
             className={pageClass("providers")}
             onClick={() => go("providers")}
@@ -255,6 +264,9 @@ function AppInner({ scope, user }: { scope: string; user: User | null }) {
         <>
           <SideIconBtn label="New chat" onClick={startChat}>
             <MessageSquarePlus className="size-4" />
+          </SideIconBtn>
+          <SideIconBtn label="Code" onClick={() => go("code")}>
+            <Code2 className="size-4" />
           </SideIconBtn>
           <SideIconBtn label="Providers" onClick={() => go("providers")}>
             <KeyRound className="size-4" />
@@ -316,7 +328,9 @@ function AppInner({ scope, user }: { scope: string; user: User | null }) {
   )
 
   const title =
-    page === "providers"
+    page === "code"
+      ? "Code"
+      : page === "providers"
       ? "Providers"
       : page === "models"
         ? "Models"
@@ -405,6 +419,11 @@ function AppInner({ scope, user }: { scope: string; user: User | null }) {
             patternHandlers={richHandlers}
           />
         </div>
+        {page === "code" ? (
+          <div className="min-h-0 flex-1 overflow-hidden">
+            <CodePage />
+          </div>
+        ) : null}
         {page === "providers" ? (
           <div className="min-h-0 flex-1 overflow-y-auto">
             <ProvidersPage />
