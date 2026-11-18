@@ -38,7 +38,7 @@ class BrowserOAuthProvider implements OAuthClientProvider {
   }
 
   get redirectUrl() {
-    return `${window.location.origin}${window.location.pathname}`
+    return `${window.location.origin}${import.meta.env.BASE_URL}`
   }
 
   get clientMetadata() {

@@ -5,7 +5,15 @@ import { Skeleton } from "@/components/ui/skeleton"
 import type { Connector } from "@/lib/connectors/catalog"
 import { cn } from "@/lib/utils"
 
-/** The brand's own colours; shimmers while loading, initials if it can't load. */
+/** Brand colours first; a plain black logo (inverted in dark mode) if that fails. */
+function sources(icon: string) {
+  return [
+    { url: `https://cdn.simpleicons.org/${icon}`, mono: false },
+    { url: `https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/${icon}.svg`, mono: true },
+  ]
+}
+
+/** Shimmers while loading, initials if no source loads. */
 export function ConnectorLogo({
   connector,
   className,
@@ -13,26 +21,27 @@ export function ConnectorLogo({
   connector: Connector
   className?: string
 }) {
-  const [failed, setFailed] = React.useState(false)
-  const url =
-    connector.icon && !failed
-      ? `https://cdn.simpleicons.org/${connector.icon}`
-      : null
+  const [index, setIndex] = React.useState(0)
+  const current = connector.icon ? (sources(connector.icon)[index] ?? null) : null
 
   return (
     <Avatar className={className}>
-      {url ? (
+      {current ? (
         <AvatarImage
-          src={url}
+          key={current.url}
+          src={current.url}
           alt=""
-          className={cn("p-1.5", connector.darkInvert && "dark:invert")}
+          className={cn(
+            "p-1.5",
+            (current.mono || connector.darkInvert) && "dark:invert"
+          )}
           onLoadingStatusChange={(status) => {
-            if (status === "error") setFailed(true)
+            if (status === "error") setIndex((i) => i + 1)
           }}
         />
       ) : null}
       <AvatarFallback>
-        {url ? (
+        {current ? (
           <Skeleton className="size-full rounded-full" />
         ) : (
           connector.name.slice(0, 2).toUpperCase()

@@ -11,7 +11,7 @@ import { SceneSync } from './components/theme-picker'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+    <ThemeProvider attribute="class" defaultTheme="dark">
       <SceneSync />
       <App />
     </ThemeProvider>

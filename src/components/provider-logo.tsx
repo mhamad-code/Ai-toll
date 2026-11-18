@@ -2,14 +2,14 @@ import * as React from "react"
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Skeleton } from "@/components/ui/skeleton"
-import { iconUrl, modelSlug, providerSlug } from "@/lib/logos"
+import { iconSources, modelSlug, providerSlug } from "@/lib/logos"
 import type { Provider } from "@/lib/providers"
 import { cn } from "@/lib/utils"
 
 /**
- * Shimmering placeholder while the logo loads, then the coloured logo; mono
- * (inverted in dark mode) when there is no coloured one, initials when
- * neither loads.
+ * Shimmering placeholder while the logo loads, then the coloured logo. If a
+ * source fails the next one is tried; mono logos are inverted in dark mode and
+ * initials show when none loads.
  */
 export function BrandLogo({
   slug,
@@ -20,30 +20,25 @@ export function BrandLogo({
   name: string
   className?: string
 }) {
-  const [failure, setFailure] = React.useState<{
-    slug: string
-    phase: "mono" | "none"
-  } | null>(null)
-  const phase = failure && failure.slug === slug ? failure.phase : "color"
-  const url = slug && phase !== "none" ? iconUrl(slug, phase === "color") : null
+  const [tried, setTried] = React.useState({ slug: "", index: 0 })
+  const index = tried.slug === slug ? tried.index : 0
+  const current = slug ? (iconSources(slug)[index] ?? null) : null
 
   return (
     <Avatar className={className}>
-      {url ? (
+      {current ? (
         <AvatarImage
-          key={url}
-          src={url}
+          key={current.url}
+          src={current.url}
           alt=""
-          className={cn("p-1", phase === "mono" && "dark:invert")}
+          className={cn("p-1", current.mono && "dark:invert")}
           onLoadingStatusChange={(status) => {
-            if (status === "error" && slug) {
-              setFailure({ slug, phase: phase === "color" ? "mono" : "none" })
-            }
+            if (status === "error" && slug) setTried({ slug, index: index + 1 })
           }}
         />
       ) : null}
       <AvatarFallback>
-        {url ? (
+        {current ? (
           <Skeleton className="size-full rounded-full" />
         ) : (
           name.slice(0, 2).toUpperCase()

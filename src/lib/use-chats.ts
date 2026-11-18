@@ -3,7 +3,7 @@ import * as React from "react"
 import type { ChatMessageData } from "@/components/ui/message-list"
 import type { MessageToolCallData } from "@/components/ui/message-parts"
 import { requestApproval } from "@/lib/approvals"
-import { loadConvs, saveConv } from "@/lib/chat-db"
+import { deleteConv, loadConvs, saveConv } from "@/lib/chat-db"
 import {
   streamChat,
   type ApiMessage,
@@ -59,8 +59,14 @@ function sourceChips(sources: { url: string; title: string; content?: string }[]
 const ERROR_PREFIX = "⚠️ "
 const MAX_STEPS = 8
 
+/** Short address-friendly id, like /chat/k3j9x0a2bq7d. */
+const newId = () =>
+  Array.from(crypto.getRandomValues(new Uint8Array(12)), (b) =>
+    (b % 36).toString(36)
+  ).join("")
+
 const newConv = (): Conv => ({
-  id: crypto.randomUUID(),
+  id: newId(),
   title: "New chat",
   messages: [],
   generating: false,
@@ -195,6 +201,20 @@ export function useChats(scope: string) {
   const stop = React.useCallback((id: string) => {
     aborts.current.get(id)?.abort()
   }, [])
+
+  /** Deletes a chat here and from this device's database. */
+  const remove = React.useCallback(
+    (id: string) => {
+      aborts.current.get(id)?.abort()
+      savedRef.current.delete(id)
+      setConvs((prev) => {
+        const next = prev.filter((c) => c.id !== id)
+        return next.length ? next : [newConv()]
+      })
+      deleteConv(scope, id).catch(() => {})
+    },
+    [scope]
+  )
 
   const send = React.useCallback(
     async (id: string, text: string, ctx: SendContext) => {
@@ -448,5 +468,5 @@ export function useChats(scope: string) {
     [appendAssistant, patch]
   )
 
-  return { convs, activeId, setActiveId, newChat, send, stop, loaded }
+  return { convs, activeId, setActiveId, newChat, send, stop, remove, loaded }
 }

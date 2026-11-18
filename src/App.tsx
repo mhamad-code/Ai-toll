@@ -5,6 +5,7 @@ import {
   Menu,
   MessageSquarePlus,
   Plug,
+  Trash2,
   UserRound,
 } from "lucide-react"
 
@@ -19,6 +20,14 @@ import { ModelsPage } from "@/components/models-page"
 import { ModelLogo, ProviderLogo } from "@/components/provider-logo"
 import { ProvidersPage } from "@/components/providers-page"
 import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { ChatNavbar } from "@/components/ui/chat-navbar"
 import {
   ChatSidebar,
@@ -34,11 +43,11 @@ import type { User } from "firebase/auth"
 import { isFirebaseConfigured, useAuth } from "@/lib/auth"
 import { handleOAuthReturn } from "@/lib/connectors/runtime"
 import { PROVIDERS } from "@/lib/providers"
+import { navigate, useRoute, type Page } from "@/lib/router"
+import { cn } from "@/lib/utils"
 import { modelKey, settings, useSettings } from "@/lib/store"
 import { switchScope } from "@/lib/scope"
 import { useChats } from "@/lib/use-chats"
-
-type Page = "chat" | "providers" | "models" | "connectors" | "account"
 
 function useIsMobile() {
   const query = "(max-width: 767px)"
@@ -83,17 +92,20 @@ function AppSkeleton() {
 function AppInner({ scope, user }: { scope: string; user: User | null }) {
   const mobile = useIsMobile()
   const { keys, saved, active, webSearch } = useSettings()
-  const { convs, activeId, setActiveId, newChat, send, stop, loaded } =
+  const { convs, activeId, setActiveId, newChat, send, stop, remove, loaded } =
     useChats(scope)
 
-  const [page, setPage] = React.useState<Page>("chat")
+  // The address bar is the source of truth: /, /chat/<id>, /models, …
+  const route = useRoute()
+  const page = route.page
+  const [deleteId, setDeleteId] = React.useState<string | null>(null)
   const [collapsed, setCollapsed] = React.useState(false)
   const [open, setOpen] = React.useState(false)
   const [sectionOpen, setSectionOpen] = React.useState(true)
 
   React.useEffect(() => {
     void handleOAuthReturn().then((handled) => {
-      if (handled) setPage("connectors")
+      if (handled) navigate({ page: "connectors" }, true)
     })
   }, [])
 
@@ -106,18 +118,49 @@ function AppInner({ scope, user }: { scope: string; user: User | null }) {
       ? { id: lastMessage.id, items: activeConv.questions[lastMessage.id] }
       : null
 
+  // /chat/<id> opens that conversation; / is always a fresh chat.
+  React.useEffect(() => {
+    if (route.page !== "chat") return
+    if (route.id) {
+      if (convs.some((c) => c.id === route.id)) {
+        if (route.id !== activeId) setActiveId(route.id)
+      } else if (loaded) {
+        navigate({ page: "chat" }, true)
+      }
+    } else {
+      const current = convs.find((c) => c.id === activeId)
+      if (current && current.messages.length > 0) newChat()
+    }
+  }, [route.page, route.id, convs, activeId, loaded, setActiveId, newChat])
+
   const go = (next: Page) => {
-    setPage(next)
+    navigate(
+      next === "chat"
+        ? activeConv.messages.length > 0
+          ? { page: "chat", id: activeConv.id }
+          : { page: "chat" }
+        : { page: next }
+    )
     setOpen(false)
   }
   const select = (id: string) => {
-    setActiveId(id)
-    go("chat")
+    navigate({ page: "chat", id })
+    setOpen(false)
   }
   const startChat = () => {
     newChat()
-    go("chat")
+    navigate({ page: "chat" })
+    setOpen(false)
   }
+  const confirmDelete = () => {
+    if (!deleteId) return
+    const wasOpen = deleteId === activeConv.id
+    if (wasOpen) newChat()
+    remove(deleteId)
+    setDeleteId(null)
+    if (wasOpen || route.id === deleteId) navigate({ page: "chat" }, true)
+  }
+  const deleting = convs.find((c) => c.id === deleteId)
 
   const options: ModelOption[] = saved.map((m) => ({
     id: modelKey(m.provider, m.id),
@@ -234,19 +277,35 @@ function AppInner({ scope, user }: { scope: string; user: User | null }) {
         onToggle={() => setSectionOpen((v) => !v)}
         count={convs.length}
       >
-        {convs.map((c) => (
-          <SideRow
-            key={c.id}
-            className={
-              page === "chat" && c.id === activeId
-                ? "bg-sidebar-accent"
-                : undefined
-            }
-            onClick={() => select(c.id)}
-          >
-            {c.title}
-          </SideRow>
-        ))}
+        {convs.map((c) => {
+          const isActive = page === "chat" && c.id === activeId
+          return (
+            <div key={c.id} className="group/chat relative">
+              <SideRow
+                className={cn(isActive && "bg-sidebar-accent", "pr-8")}
+                onClick={() => select(c.id)}
+              >
+                {c.title}
+              </SideRow>
+              {c.messages.length > 0 ? (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={`Delete chat: ${c.title}`}
+                  className={cn(
+                    "absolute top-1/2 right-1 size-6 -translate-y-1/2",
+                    isActive
+                      ? "opacity-100"
+                      : "opacity-0 group-hover/chat:opacity-100 focus-visible:opacity-100"
+                  )}
+                  onClick={() => setDeleteId(c.id)}
+                >
+                  <Trash2 className="size-3.5" />
+                </Button>
+              ) : null}
+            </div>
+          )
+        })}
         {!loaded
           ? [0, 1, 2].map((i) => (
               <Skeleton key={i} className="mx-2 my-1 h-7" />
@@ -270,6 +329,30 @@ function AppInner({ scope, user }: { scope: string; user: User | null }) {
   return (
     <div className="flex h-dvh w-full overflow-hidden bg-background text-foreground">
       <ApprovalDialog />
+      <Dialog
+        open={deleteId !== null}
+        onOpenChange={(next) => {
+          if (!next) setDeleteId(null)
+        }}
+      >
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Delete this chat?</DialogTitle>
+            <DialogDescription>
+              {deleting ? `"${deleting.title}" ` : ""}will be removed from this
+              device. This can't be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteId(null)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={confirmDelete}>
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       {mobile ? (
         open ? (
           <>
@@ -307,13 +390,15 @@ function AppInner({ scope, user }: { scope: string; user: User | null }) {
             messages={activeConv.messages}
             isGenerating={activeConv.generating}
             generationStartedAt={activeConv.startedAt}
-            onSend={(text) =>
-              send(activeConv.id, text, {
+            onSend={(text) => {
+              // The first message gives the chat its own address.
+              if (!route.id) navigate({ page: "chat", id: activeConv.id }, true)
+              void send(activeConv.id, text, {
                 model: activeModel,
                 apiKey,
                 webSearch,
               })
-            }
+            }}
             onStop={() => stop(activeConv.id)}
             tools={picker}
             pendingQuestions={pendingQuestions}

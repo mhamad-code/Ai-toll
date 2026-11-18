@@ -1,11 +1,21 @@
 /**
- * Brand logos from the Lobe Icons set. `{slug}-color.svg` is the coloured
- * version; `{slug}.svg` is the mono fallback.
+ * Brand logos from the Lobe Icons set, tried in turn: coloured then mono on
+ * jsDelivr, then the same two on unpkg, so one CDN being slow or down doesn't
+ * leave a blank logo.
  */
-const BASE = "https://unpkg.com/@lobehub/icons-static-svg@latest/icons"
+const CDNS = [
+  "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@latest/icons",
+  "https://unpkg.com/@lobehub/icons-static-svg@latest/icons",
+]
 
-export const iconUrl = (slug: string, color: boolean) =>
-  `${BASE}/${slug}${color ? "-color" : ""}.svg`
+export type IconSource = { url: string; mono: boolean }
+
+export function iconSources(slug: string): IconSource[] {
+  return CDNS.flatMap((base) => [
+    { url: `${base}/${slug}-color.svg`, mono: false },
+    { url: `${base}/${slug}.svg`, mono: true },
+  ])
+}
 
 const PROVIDER_SLUGS: Record<string, string> = {
   openrouter: "openrouter",
